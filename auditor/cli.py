@@ -186,7 +186,7 @@ def m365_audit(
     output: Annotated[Optional[Path], typer.Option("--output", "-o")] = None,
     fmt: Annotated[str, typer.Option("--format", "-f")] = "markdown",
 ) -> None:
-    """Full authenticated M365 tenant audit (Entra ID + Exchange)."""
+    """Full authenticated M365 tenant audit (Entra ID + Exchange + SharePoint + Teams)."""
     print_banner()
 
     if not authorized:
@@ -215,6 +215,8 @@ async def _m365_audit_async(
     from auditor.modules.m365.auth import get_token_device_code, get_token_client_credentials
     from auditor.modules.m365.entra import run_entra_audit
     from auditor.modules.m365.exchange import audit_exchange
+    from auditor.modules.m365.sharepoint import audit_sharepoint
+    from auditor.modules.m365.teams import audit_teams
     from auditor.modules.report.generator import save_report
 
     # Acquire token
@@ -240,6 +242,16 @@ async def _m365_audit_async(
     # Exchange audit
     exo_findings = await audit_exchange(token)
     for f in exo_findings:
+        session.add_finding(f)
+
+    # SharePoint / OneDrive audit
+    spo_findings = await audit_sharepoint(token)
+    for f in spo_findings:
+        session.add_finding(f)
+
+    # Teams audit
+    teams_findings = await audit_teams(token)
+    for f in teams_findings:
         session.add_finding(f)
 
     if session.findings:

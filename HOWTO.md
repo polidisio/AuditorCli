@@ -121,6 +121,9 @@ auditor m365 audit --domain empresa.com --authorized --format json --output ./re
 - `User.Read.All`
 - `Application.Read.All`
 - `RoleManagement.Read.All`
+- `Sites.Read.All` *(SharePoint audit)*
+- `TeamSettings.Read.All` *(Teams audit)*
+- `Group.Read.All` *(Teams enumeration)*
 
 **Qué audita:**
 | Check | Finding ID | MITRE |
@@ -133,6 +136,77 @@ auditor m365 audit --domain empresa.com --authorized --format json --output ./re
 | Roles privilegiados permanentes sin PIM | M365-ROLE-001 | T1078.004 |
 | Reglas de reenvío externo en buzones | M365-EXO-001 | T1114.003 |
 | SMTP AUTH por buzón (verificación manual) | M365-EXO-002 | T1078.004 |
+| **SharePoint** | | |
+| Sharing anónimo ("Anyone") habilitado | SPO-001 | T1567.002 |
+| Link por defecto es tipo anónimo | SPO-002 | T1567.002 |
+| Links anónimos sin fecha de expiración | SPO-003 | T1567.002 |
+| Legacy auth habilitada en SharePoint | SPO-004 | T1078.004 |
+| Site collections con sharing anónimo | SPO-005 | T1567.002 |
+| OneDrive permite links anónimos | SPO-006 | T1567.002 |
+| **Teams** | | |
+| Acceso externo abierto a todos los dominios | TEAMS-001 | T1566.003 |
+| Guest access habilitado (verificar permisos) | TEAMS-002 | T1087.004 |
+| Comunicación con cuentas no gestionadas (Skype) | TEAMS-003 | T1566.003 |
+| Teams públicos visibles a todo el tenant | TEAMS-004 | T1087.004 |
+| Teams con miembros guest | TEAMS-005 | T1087.004 |
+| Usuarios anónimos pueden unirse a reuniones | TEAMS-006 | T1566.003 |
+| Apps de terceros permitidas sin whitelist | TEAMS-007 | T1550.001 |
+| Sideloading de apps custom permitido | TEAMS-008 | T1550.001 |
+
+---
+
+### SharePoint / OneDrive — Checks clave
+
+El módulo `m365 audit` incluye SharePoint automáticamente. Checks ejecutados:
+
+```
+SPO-001  Tenant sharing level = "Anyone with the link" (anonymous)
+SPO-002  Default link type = anonymous
+SPO-003  Anonymous links sin expiración
+SPO-004  Legacy auth habilitada en SPO
+SPO-005  Site collections individuales con sharing anónimo
+SPO-006  OneDrive for Business con sharing anónimo
+```
+
+Para auditar permisos de una site collection específica, usar el SDK directamente:
+
+```python
+from auditor.modules.m365.sharepoint import audit_sharepoint_permissions
+# site_id obtenible de: https://graph.microsoft.com/v1.0/sites?search=*
+await audit_sharepoint_permissions(token, "contoso.sharepoint.com,<site-id>,<web-id>")
+```
+
+**Verificación manual complementaria (PowerShell):**
+```powershell
+Connect-SPOService -Url https://contoso-admin.sharepoint.com
+Get-SPOTenant | Select SharingCapability, DefaultSharingLinkType, RequireAnonymousLinksExpireInDays
+Get-SPOSite -Limit All | Select Url, SharingCapability | Where {$_.SharingCapability -ne "Disabled"}
+```
+
+---
+
+### Teams — Checks clave
+
+```
+TEAMS-001  External access abierto a todos los dominios externos
+TEAMS-002  Guest access habilitado (revisar permisos granulares)
+TEAMS-003  Comunicación con cuentas personales/Skype habilitada
+TEAMS-004  Teams con visibilidad Public (cualquier interno puede unirse)
+TEAMS-005  Teams con miembros guest — listar cuáles
+TEAMS-006  Usuarios anónimos pueden unirse a reuniones sin cuenta
+TEAMS-007  Apps de terceros permitidas sin lista blanca
+TEAMS-008  Sideloading de apps custom habilitado
+```
+
+**Verificación manual complementaria (PowerShell):**
+```powershell
+# Requires MicrosoftTeams module
+Connect-MicrosoftTeams
+Get-CsExternalAccessPolicy -Identity Global
+Get-CsTeamsGuestAccessConfiguration
+Get-CsTeamsMeetingPolicy -Identity Global | Select AllowAnonymousUsersToJoinMeeting
+Get-CsTeamsAppPermissionPolicy -Identity Global
+```
 
 ---
 
@@ -186,11 +260,14 @@ pytest tests/ --cov=auditor --cov-report=term-missing
 
 ## Roadmap
 
-- [ ] Módulo SharePoint/OneDrive — audit de permisos de sharing externo
-- [ ] Módulo Teams — federación y guest access
+- [x] Módulo SharePoint/OneDrive — audit de permisos de sharing externo
+- [x] Módulo Teams — federación, guest access, meeting policies, app policies
 - [ ] Output HTML con gráficas de riesgo
 - [ ] Integración con ROADtools/AADInternals (subprocess wrappers)
 - [ ] PowerShell bridge para checks Exchange que requieren EXO module
+- [ ] Sensitivity labels audit (SharePoint + Teams)
+- [ ] Cross-tenant access policy (B2B) deep audit
+- [ ] Defender for Cloud Apps (MCAS) alerts integration
 
 ---
 

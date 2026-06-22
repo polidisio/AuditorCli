@@ -57,8 +57,19 @@ CLI modules → Runner → Output (JSON/Markdown/HTML)
 
 ### Módulos principales
 1. **Web Recon** — subdomain enum, port scan, endpoint fuzzing, vuln scan
-2. **M365 Audit** — Entra ID recon (AADInternals/ROADtools), Exchange audit, CA policy review
+2. **M365 Audit** — Entra ID, Exchange, SharePoint, Teams (Graph API)
 3. **Report** — generación de reporte estructurado con matriz de priorización
+
+### M365 módulos (`auditor/modules/m365/`)
+| Archivo | Responsabilidad |
+|---------|----------------|
+| `recon.py` | Pre-auth tenant recon (OpenID config, GetUserRealm) |
+| `auth.py` | MSAL device-code + client-credentials |
+| `graph.py` | Graph API client con paginación |
+| `entra.py` | CA policies, MFA, service principals, privileged roles |
+| `exchange.py` | Inbox forwarding rules, SMTP AUTH |
+| `sharepoint.py` | Sharing level, anonymous links, site collections, OneDrive |
+| `teams.py` | External access, guest access, meetings, 3rd-party apps |
 
 ### Reference Skills (mukul975/Anthropic-Cybersecurity-Skills)
 - `skills/auditing-entra-id-with-aadinternals`
@@ -66,6 +77,7 @@ CLI modules → Runner → Output (JSON/Markdown/HTML)
 - `skills/detecting-suspicious-oauth-application-consent`
 - `skills/detecting-email-forwarding-rules-attack`
 - `skills/analyzing-office365-audit-logs-for-compromise`
+- `skills/hunting-saas-sso-token-abuse`
 
 ---
 
@@ -134,10 +146,11 @@ auditor m365-audit --verbose --dry-run
 ## Status
 
 ### Current Phase
-- [ ] Phase 1: Estructura del proyecto + CLI skeleton
-- [ ] Phase 2: Módulo Web Recon (passive + active)
-- [ ] Phase 3: Módulo M365 Audit (Entra ID + Exchange)
-- [ ] Phase 4: Report generator
+- [x] Phase 1: Estructura del proyecto + CLI skeleton
+- [x] Phase 2: Módulo Web Recon (passive + active)
+- [x] Phase 3: Módulo M365 Audit (Entra ID + Exchange + SharePoint + Teams)
+- [x] Phase 4: Report generator (Markdown + JSON)
+- [ ] Phase 5: Output HTML + ROADtools/AADInternals integration
 
 ---
 
