@@ -39,7 +39,7 @@ def web_recon(
     authorized: Annotated[bool, typer.Option("--authorized", help="Confirm you are authorized to perform active scans")] = False,
     passive_only: Annotated[bool, typer.Option("--passive-only", help="Skip active scanning (nmap, nuclei)")] = False,
     output: Annotated[Optional[Path], typer.Option("--output", "-o", help="Output directory")] = None,
-    fmt: Annotated[str, typer.Option("--format", "-f", help="Report format: markdown | json")] = "markdown",
+    fmt: Annotated[str, typer.Option("--format", "-f", help="Report format: markdown | json | xlsx")] = "markdown",
 ) -> None:
     """Web application and network reconnaissance."""
     print_banner()
@@ -184,7 +184,7 @@ def m365_audit(
     authorized: Annotated[bool, typer.Option("--authorized", help="Confirm written authorization")] = False,
     auth_flow: Annotated[str, typer.Option("--auth", help="Auth flow: device-code | client-credentials")] = "device-code",
     output: Annotated[Optional[Path], typer.Option("--output", "-o")] = None,
-    fmt: Annotated[str, typer.Option("--format", "-f")] = "markdown",
+    fmt: Annotated[str, typer.Option("--format", "-f", help="Report format: markdown | json | xlsx")] = "markdown",
 ) -> None:
     """Full authenticated M365 tenant audit (Entra ID + Exchange + SharePoint + Teams)."""
     print_banner()
@@ -268,7 +268,7 @@ async def _m365_audit_async(
 def report_view(
     path: Annotated[Path, typer.Argument(help="Path to JSON session file")],
 ) -> None:
-    """View a saved audit session."""
+    """View a saved audit session in the terminal."""
     import json
     from auditor.models import AuditSession
 
@@ -279,6 +279,32 @@ def report_view(
     data = json.loads(path.read_text())
     session = AuditSession.model_validate(data)
     print_findings_table(session.findings)
+
+
+@report_app.command("export")
+def report_export(
+    path: Annotated[Path, typer.Argument(help="Path to JSON session file")],
+    fmt: Annotated[str, typer.Option("--format", "-f", help="Export format: markdown | json | xlsx")] = "xlsx",
+    output: Annotated[Optional[Path], typer.Option("--output", "-o", help="Output directory")] = None,
+) -> None:
+    """Export a saved JSON session to xlsx, markdown, or json."""
+    import json
+    from auditor.models import AuditSession
+    from auditor.modules.report.generator import save_report
+    from auditor.config import get_settings
+
+    if not path.exists():
+        print_err(f"File not found: {path}")
+        raise typer.Exit(1)
+
+    data = json.loads(path.read_text())
+    session = AuditSession.model_validate(data)
+
+    settings = get_settings()
+    out_dir = output or path.parent
+
+    out_path = save_report(session, out_dir, fmt)
+    print_ok(f"Exported [{fmt}]: {out_path}")
 
 
 @app.callback(invoke_without_command=True)

@@ -210,10 +210,48 @@ Get-CsTeamsAppPermissionPolicy -Identity Global
 
 ---
 
-### `auditor report view` — Ver reporte guardado
+### `auditor report view` — Ver reporte en terminal
 
 ```bash
 auditor report view ~/.auditor/output/audit_empresa_com_20260622_120000.json
+```
+
+---
+
+### `auditor report export` — Exportar a Excel / Markdown / JSON
+
+Exporta una sesión JSON ya guardada a otro formato **sin necesidad de re-escanear**.
+
+```bash
+# Exportar a Excel (por defecto)
+auditor report export ~/.auditor/output/audit_empresa_com_20260622_120000.json
+
+# Especificar formato y directorio de salida
+auditor report export audit.json --format xlsx --output ./entregas/
+auditor report export audit.json --format markdown --output ./entregas/
+auditor report export audit.json --format json --output ./entregas/
+```
+
+**El archivo Excel generado contiene 3 hojas:**
+
+| Hoja | Contenido |
+|------|-----------|
+| **Resumen Ejecutivo** | Metadatos del target, conteo por prioridad (Alta/Media/Baja), leyenda de colores |
+| **Hallazgos** | Tabla completa con todas las columnas: ID, Componente, Título, MITRE ATT&CK, Severidad, Prioridad, Vector, Descripción, Evidencia, Remediación. Header congelado, AutoFilter activo, ordenado por prioridad |
+| **Matriz por Componente** | Agrupación de findings por componente: cuántos Alta/Media/Baja tiene cada área |
+
+**Colores por prioridad en Excel:**
+- Rojo oscuro `#C0392B` → Alta
+- Naranja `#E67E22` → Media
+- Azul `#2980B9` → Baja
+
+**Generar Excel directamente durante el escaneo:**
+```bash
+# Web recon con output Excel
+auditor web recon --target empresa.com --passive-only --format xlsx
+
+# M365 audit con output Excel
+auditor m365 audit --domain empresa.com --authorized --format xlsx
 ```
 
 ---

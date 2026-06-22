@@ -91,6 +91,9 @@ def save_report(session: AuditSession, output_dir: Path, fmt: str = "markdown") 
     if fmt == "json":
         path = output_dir / f"audit_{domain_slug}_{ts}.json"
         path.write_text(generate_json(session), encoding="utf-8")
+    elif fmt == "xlsx":
+        from auditor.modules.report.excel import save_excel
+        path = save_excel(session, output_dir)
     else:
         path = output_dir / f"audit_{domain_slug}_{ts}.md"
         path.write_text(generate_markdown(session), encoding="utf-8")
