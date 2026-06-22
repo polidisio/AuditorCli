@@ -65,6 +65,28 @@ def web_recon(
     asyncio.run(_web_recon_async(domain, session, passive_only, out_dir, fmt))
 
 
+def _sev_from_tag(tag: str) -> tuple["Severity", "Priority"]:
+    from auditor.models import Severity, Priority
+    _map = {
+        "CRITICAL": (Severity.CRITICAL, Priority.HIGH),
+        "HIGH":     (Severity.HIGH,     Priority.HIGH),
+        "MEDIUM":   (Severity.MEDIUM,   Priority.MEDIUM),
+        "LOW":      (Severity.LOW,      Priority.LOW),
+        "INFO":     (Severity.INFO,     Priority.LOW),
+    }
+    return _map.get(tag.upper(), (Severity.MEDIUM, Priority.MEDIUM))
+
+
+def _parse_issue(issue: str) -> tuple[str, "Severity", "Priority"]:
+    """Extract '[TAG] message' → (message, Severity, Priority)."""
+    from auditor.models import Severity, Priority
+    if issue.startswith("[") and "]" in issue:
+        tag, _, msg = issue[1:].partition("] ")
+        sev, pri = _sev_from_tag(tag)
+        return msg.strip(), sev, pri
+    return issue, Severity.MEDIUM, Priority.MEDIUM
+
+
 async def _web_recon_async(
     domain: str,
     session: AuditSession,
@@ -74,6 +96,7 @@ async def _web_recon_async(
 ) -> None:
     from auditor.modules.web.passive import run_passive_recon, http_probe, check_dns_records, analyze_dmarc
     from auditor.modules.web.active import run_active_recon
+    from auditor.modules.web.headers import run_headers_audit
     from auditor.modules.report.generator import save_report
     from auditor.models import Finding, Severity, Priority
 
@@ -108,6 +131,85 @@ async def _web_recon_async(
             remediation="Configure SPF -all, DKIM selector1/selector2, DMARC p=reject.",
         )
         session.add_finding(finding)
+
+    # Security headers + HSTS + TLS/cipher + cookies
+    print_step("Auditing security headers, HSTS, TLS and cipher suites...")
+    header_results = await run_headers_audit(live_urls)
+
+    _HEADER_REMEDIATIONS: dict[str, str] = {
+        "Content-Security-Policy": "Define a strict CSP policy; start with 'default-src self' and restrict script/style sources.",
+        "Strict-Transport-Security": "Add: Strict-Transport-Security: max-age=31536000; includeSubDomains; preload",
+        "X-Frame-Options": "Add: X-Frame-Options: DENY (or use CSP frame-ancestors 'none')",
+        "X-Content-Type-Options": "Add: X-Content-Type-Options: nosniff",
+        "Referrer-Policy": "Add: Referrer-Policy: strict-origin-when-cross-origin",
+        "Permissions-Policy": "Add Permissions-Policy restricting unneeded browser features.",
+        "HSTS": "Configure HSTS with max-age ≥31536000, includeSubDomains, preload.",
+        "TLS": "Disable TLS ≤1.1, SSLv3, weak ciphers; enable TLS 1.3; use ECDHE cipher suites.",
+        "Cookie": "Set Secure, HttpOnly, and SameSite=Strict (or Lax) on all session cookies.",
+        "redirect": "Configure HTTP (port 80) to return 301 redirect to https://.",
+    }
+
+    def _hdr_remediation(msg: str) -> str:
+        for key, rem in _HEADER_REMEDIATIONS.items():
+            if key.lower() in msg.lower():
+                return rem
+        return "Review and apply recommended security header configuration."
+
+    for hr in header_results:
+        all_header_issues = hr.missing_headers + hr.hsts_issues + hr.cookie_issues
+        for raw_issue in all_header_issues:
+            msg, sev, pri = _parse_issue(raw_issue)
+            if sev == Severity.INFO:
+                console.print(f"  [dim][INFO][/] {hr.url}: {msg}")
+                continue
+            print_warn(f"{hr.url}: {msg}")
+            idx = len(session.findings) + 1
+            session.add_finding(Finding(
+                id=f"WEB-HDR-{idx:03d}",
+                title=msg,
+                component=f"Web Headers — {hr.url}",
+                vector="HTTP response headers — missing or misconfigured security controls",
+                mitre_id=None,
+                severity=sev,
+                priority=pri,
+                description=msg,
+                remediation=_hdr_remediation(msg),
+            ))
+
+        for raw_issue in hr.tls_issues:
+            msg, sev, pri = _parse_issue(raw_issue)
+            if sev == Severity.INFO:
+                console.print(f"  [dim][INFO][/] {hr.url}: {msg}")
+                continue
+            print_warn(f"{hr.url}: {msg}")
+            idx = len(session.findings) + 1
+            session.add_finding(Finding(
+                id=f"WEB-TLS-{idx:03d}",
+                title=msg,
+                component=f"TLS/Certificate — {hr.url}",
+                vector="TLS configuration — weak protocols, ciphers, or certificate issues",
+                mitre_id="T1557.002",
+                severity=sev,
+                priority=pri,
+                description=msg,
+                remediation=_HEADER_REMEDIATIONS["TLS"],
+            ))
+
+        if hr.redirect_issue:
+            msg, sev, pri = _parse_issue(hr.redirect_issue)
+            print_warn(f"{hr.url}: {msg}")
+            idx = len(session.findings) + 1
+            session.add_finding(Finding(
+                id=f"WEB-HDR-{idx:03d}",
+                title=msg,
+                component=f"HTTP Redirect — {hr.url}",
+                vector="Plaintext HTTP access allowed — no forced redirect to HTTPS",
+                mitre_id="T1557",
+                severity=sev,
+                priority=pri,
+                description=msg,
+                remediation=_HEADER_REMEDIATIONS["redirect"],
+            ))
 
     # Active recon
     if not passive_only and live_urls:

@@ -60,6 +60,13 @@ CLI modules → Runner → Output (JSON/Markdown/HTML)
 2. **M365 Audit** — Entra ID, Exchange, SharePoint, Teams (Graph API)
 3. **Report** — generación de reporte estructurado con matriz de priorización
 
+### Web módulos (`auditor/modules/web/`)
+| Archivo | Responsabilidad |
+|---------|----------------|
+| `passive.py` | Subdomain enum (subfinder + DNS brute-force), HTTP probe, DNS email records (SPF/DMARC/DKIM) |
+| `active.py` | nmap port scan, nuclei CVE/misconfiguration scan (requiere `--authorized`) |
+| `headers.py` | Security headers audit, HSTS validation, TLS/cipher check, cookie flags, HTTP→HTTPS redirect |
+
 ### M365 módulos (`auditor/modules/m365/`)
 | Archivo | Responsabilidad |
 |---------|----------------|
@@ -149,7 +156,8 @@ auditor m365-audit --verbose --dry-run
 - [x] Phase 1: Estructura del proyecto + CLI skeleton
 - [x] Phase 2: Módulo Web Recon (passive + active)
 - [x] Phase 3: Módulo M365 Audit (Entra ID + Exchange + SharePoint + Teams)
-- [x] Phase 4: Report generator (Markdown + JSON)
+- [x] Phase 4: Report generator (Markdown + JSON + Excel)
+- [x] Phase 4b: Web security headers + HSTS + TLS/cipher + cookie audit (`headers.py`)
 - [ ] Phase 5: Output HTML + ROADtools/AADInternals integration
 
 ---

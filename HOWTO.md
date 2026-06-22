@@ -17,7 +17,7 @@ python3.11 -m venv .venv
 source .venv/bin/activate   # macOS/Linux
 # .venv\Scripts\activate    # Windows
 
-# Instalar
+# Instalar en modo editable con dev deps
 pip install -e ".[dev]"
 
 # Verificar
@@ -34,6 +34,56 @@ brew install nmap
 go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
 go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
 go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
+```
+
+---
+
+## Reinstalación
+
+Cuando se actualiza el repositorio (`git pull`) o se añaden nuevos módulos, no es necesario reinstalar si ya estás en modo editable (`pip install -e`). Los cambios en `.py` toman efecto inmediatamente.
+
+**Cuando SÍ hace falta reinstalar:**
+- Se modificó `pyproject.toml` (nuevas dependencias, scripts, versión)
+- El entrypoint `auditor` dejó de funcionar
+- Se corrompió el entorno virtual
+- Error de tipo `ModuleNotFoundError` tras un `git pull`
+
+### Reinstalación rápida (mantiene el venv)
+
+```bash
+source .venv/bin/activate
+
+# Actualizar código
+git pull
+
+# Reinstalar (resuelve nuevas deps y regenera entrypoints)
+pip install -e ".[dev]"
+
+# Verificar
+auditor --version
+```
+
+### Reinstalación limpia (venv desde cero)
+
+```bash
+# Desactivar y eliminar entorno anterior
+deactivate 2>/dev/null; rm -rf .venv
+
+# Recrear
+python3.11 -m venv .venv
+source .venv/bin/activate
+
+# Reinstalar
+pip install -e ".[dev]"
+
+# Verificar
+auditor --version
+```
+
+### Actualizar solo dependencias (sin tocar el código)
+
+```bash
+pip install --upgrade -e ".[dev]"
 ```
 
 ---
@@ -81,7 +131,71 @@ auditor web recon --target empresa.com --passive-only --format json
 - Enumera subdominios (subfinder + DNS brute-force de prefijos comunes)
 - Prueba servicios HTTP/HTTPS activos en todos los subdominios encontrados
 - Analiza registros DNS de email (SPF, DMARC, DKIM) — identifica misconfiguraciones de spoofing
+- **Audita headers de seguridad HTTP** (ver tabla abajo)
+- **Valida HSTS** (presencia, max-age, includeSubDomains, preload)
+- **Audita TLS y cipher suites** (cert expiry, protocolos débiles, cifrados rotos, PFS)
+- **Audita flags de cookies** (Secure, HttpOnly, SameSite)
+- **Verifica redirect HTTP→HTTPS**
 - Con `--authorized`: lanza nmap (port scan) y nuclei (CVEs, exposures, misconfigurations)
+
+#### Headers auditados
+
+| Header | Finding si ausente | Severidad |
+|---|---|---|
+| `Content-Security-Policy` | XSS / content injection risk | HIGH |
+| `Strict-Transport-Security` | HTTPS no enforced, MITM posible | HIGH |
+| `X-Frame-Options` | Clickjacking risk | MEDIUM |
+| `X-Content-Type-Options` | MIME sniffing risk | MEDIUM |
+| `Referrer-Policy` | Info leakage en referrer | LOW |
+| `Permissions-Policy` | Feature exposure (cam, mic, geo) | LOW |
+| `X-XSS-Protection` | Filtro XSS ausente (browsers legacy) | LOW |
+| `X-Permitted-Cross-Domain-Policies` | Flash/PDF cross-domain no restringido | LOW |
+| `Cross-Origin-Opener-Policy` | Side-channel isolation ausente (Spectre) | LOW |
+| `Cross-Origin-Resource-Policy` | Cross-origin reads no restringidos | LOW |
+| `Cross-Origin-Embedder-Policy` | SharedArrayBuffer isolation ausente | LOW |
+| `Cache-Control: no-store` | Respuestas sensibles cacheadas | LOW |
+| `Server` / `X-Powered-By` | Disclosure de versión/tecnología | LOW |
+
+#### HSTS — checks ejecutados
+
+| Check | Severidad |
+|---|---|
+| Header HSTS ausente | HIGH |
+| `max-age=0` (HSTS desactivado) | HIGH |
+| HSTS enviado sobre HTTP (ignorado por browsers) | HIGH |
+| `max-age` < 31 536 000 s (1 año) | MEDIUM |
+| Ausencia de `includeSubDomains` | MEDIUM |
+| Ausencia de `preload` | LOW |
+
+#### TLS / Certificate / Cipher — checks ejecutados
+
+| Check | Severidad |
+|---|---|
+| Certificado expirado | CRITICAL |
+| Cifrado NULL (sin cifrado) | CRITICAL |
+| Cifrado anónimo (sin autenticación) | CRITICAL |
+| TLS 1.0 aceptado | HIGH |
+| TLS 1.1 aceptado | HIGH |
+| Cifrado RC4 o ARCFOUR | HIGH |
+| Cifrado 3DES / DES-CBC3 (SWEET32) | HIGH |
+| Cifrado EXPORT-grade (FREAK/Logjam) | HIGH |
+| Certificado self-signed | HIGH |
+| SAN mismatch | HIGH |
+| Certificado expira en ≤30 días | HIGH |
+| Sin Perfect Forward Secrecy (no ECDHE/DHE) | MEDIUM |
+| MD5 en cipher suite (MAC débil) | MEDIUM |
+| Certificado expira en ≤90 días | MEDIUM |
+| TLS 1.3 no soportado | LOW |
+
+#### Cookie flags — checks ejecutados
+
+| Check | Severidad |
+|---|---|
+| `SameSite=None` sin `Secure` | HIGH |
+| Ausencia de flag `Secure` (en HTTPS) | MEDIUM |
+| Ausencia de flag `HttpOnly` | MEDIUM |
+| Ausencia de atributo `SameSite` | MEDIUM |
+| `Max-Age` > 1 año | LOW |
 
 ---
 
