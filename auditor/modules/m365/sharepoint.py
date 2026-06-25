@@ -23,8 +23,11 @@ async def _discover_admin_url(graph_client: GraphClient) -> str | None:
     return None
 
 
-async def _get_spo_settings_via_rest(admin_url: str, sp_token: str) -> dict | None:
-    """Call SharePoint Online REST API for tenant-level settings."""
+async def _get_spo_settings_via_rest(admin_url: str, sp_token: str) -> tuple[dict | None, int]:
+    """Call SharePoint Online REST API for tenant-level settings.
+
+    Returns (data, status_code). On non-2xx, logs the status and body excerpt.
+    """
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.get(
             f"{admin_url}/_api/SPO.Tenant/GetSPOTenant",
@@ -34,8 +37,12 @@ async def _get_spo_settings_via_rest(admin_url: str, sp_token: str) -> dict | No
             },
         )
         if r.is_success:
-            return r.json()
-    return None
+            return r.json(), r.status_code
+        body = r.text[:300] if r.text else ""
+        print_warn(
+            f"SharePoint REST API returned HTTP {r.status_code} for GetSPOTenant: {body}"
+        )
+        return None, r.status_code
 
 
 # Sharing capability values from Graph API
@@ -165,7 +172,16 @@ async def audit_sharepoint(access_token: str) -> list[Finding]:
             print_warn("SharePoint admin settings: Graph 403 — trying SharePoint REST API fallback...")
             admin_url = await _discover_admin_url(client)
             sp_token = acquire_resource_token(admin_url) if admin_url else None
-            spo_data = await _get_spo_settings_via_rest(admin_url, sp_token) if (admin_url and sp_token) else None
+            spo_data: dict | None = None
+            if admin_url and sp_token:
+                spo_data, status = await _get_spo_settings_via_rest(admin_url, sp_token)
+                if spo_data is None and status in (401, 403):
+                    # Silent token was accepted by MSAL but rejected by SharePoint
+                    # admin API — likely needs a fresh MFA claim. Retry with
+                    # device-code flow.
+                    sp_token = acquire_resource_token(admin_url, force_interactive=True)
+                    if sp_token:
+                        spo_data, status = await _get_spo_settings_via_rest(admin_url, sp_token)
 
             if spo_data:
                 print_ok(f"SharePoint REST API: settings retrieved from {admin_url}")

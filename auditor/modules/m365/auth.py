@@ -66,30 +66,35 @@ def get_token_device_code(settings: Settings) -> str | None:
     return None
 
 
-def acquire_resource_token(resource_base_url: str) -> str | None:
+def acquire_resource_token(resource_base_url: str, force_interactive: bool = False) -> str | None:
     """Acquire a token for a non-Graph resource (e.g. SharePoint admin URL).
 
     Tries silent acquisition first (uses the refresh token cached from the
-    initial device-code flow). If silent fails — typical when the resource
-    requires fresh user interaction (AADSTS50199), which SharePoint admin
-    APIs enforce even when the MFA claim is present in the cached token —
+    initial device-code flow). If silent fails — or force_interactive=True —
     falls back to a new device-code flow for this resource.
+
+    force_interactive=True skips silent entirely. Useful when the silent token
+    is technically valid but rejected by the resource (e.g. SharePoint admin
+    API returns AADSTS50199 / 401 because it requires a fresh MFA claim).
     """
     if not _app or not _account:
         return None
     scopes = [f"{resource_base_url}/.default"]
 
-    result = _app.acquire_token_silent(scopes=scopes, account=_account)
-    if result and "access_token" in result:
-        return result["access_token"]
+    if not force_interactive:
+        result = _app.acquire_token_silent(scopes=scopes, account=_account)
+        if result and "access_token" in result:
+            return result["access_token"]
 
-    silent_err = ""
-    if result:
-        silent_err = result.get("error_description") or result.get("error") or "unknown"
-    print_warn(
-        f"Silent token acquisition failed for {resource_base_url}: {silent_err}\n"
-        "Resource requires fresh user interaction — starting device-code flow..."
-    )
+        silent_err = ""
+        if result:
+            silent_err = result.get("error_description") or result.get("error") or "unknown"
+        print_warn(
+            f"Silent token acquisition failed for {resource_base_url}: {silent_err}\n"
+            "Resource requires fresh user interaction — starting device-code flow..."
+        )
+    else:
+        print_warn(f"Forcing interactive auth for {resource_base_url} (silent token was rejected)...")
 
     flow = _app.initiate_device_flow(scopes=scopes)
     if "user_code" not in flow:
