@@ -304,4 +304,4 @@ ruff check auditor/
 
 Apache 2.0
 
-**Owner:** Jose Maudisio ([@polidisio](https://github.com/polidisio))
+**Owner:** Jose Audisio ([@polidisio](https://github.com/polidisio))
