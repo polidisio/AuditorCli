@@ -27,6 +27,7 @@ class Finding(BaseModel):
     component: str
     vector: str
     mitre_id: str | None = None
+    mitre_tactic: str | None = None
     severity: Severity
     priority: Priority
     description: str

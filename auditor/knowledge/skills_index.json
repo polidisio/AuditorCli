@@ -1,0 +1,475 @@
+{
+  "_meta": {
+    "skills_commit": "768ca51c8d331ab0bdcea8ffb31c9b99bb2c1839",
+    "generated_at": "2026-06-25T08:57:19.464645+00:00",
+    "skills_repo": "https://github.com/mukul975/Anthropic-Cybersecurity-Skills"
+  },
+  "checks": {
+    "M365-CA-001": {
+      "skill_name": "auditing-entra-id-with-aadinternals",
+      "mitre_id": "T1078.004",
+      "mitre_tactic": "Initial Access",
+      "remediation": "### Step 1: Unauthenticated outsider reconnaissance\nNo credentials required. Identify verified domains, tenant ID, federation type, brand, and SSO status.\n\n```powershell\n# Full outsider recon for a domain (table output)\nInvoke-AADIntReconAsOutsider -DomainName \"target.com\" | Format-Table\n\n# Login/realm details: federation vs managed, AuthURL, brand\nGet-AADIntLoginInformation -Domain \"target.com\"\n\n# Tenant GUID\nGet-AADIntTenantID -Domain \"target.com\"\n```\n\n### Step 2: External user enumeration (optional, noisy)\nValidate whether usernames exist via the GetCredentialType / autologon endpoints.\n\n``",
+      "nist_csf": [
+        "ID.AM-03"
+      ],
+      "tags": [
+        "['aadinternals'",
+        "'entra-id'",
+        "'azure-ad'",
+        "'saml-token-forgery'",
+        "'federation-backdoor'",
+        "'token-manipulation'",
+        "'adfs'",
+        "'red-team']"
+      ]
+    },
+    "M365-CA-002": {
+      "skill_name": "auditing-entra-id-with-aadinternals",
+      "mitre_id": "T1078.004",
+      "mitre_tactic": "Initial Access",
+      "remediation": "### Step 1: Unauthenticated outsider reconnaissance\nNo credentials required. Identify verified domains, tenant ID, federation type, brand, and SSO status.\n\n```powershell\n# Full outsider recon for a domain (table output)\nInvoke-AADIntReconAsOutsider -DomainName \"target.com\" | Format-Table\n\n# Login/realm details: federation vs managed, AuthURL, brand\nGet-AADIntLoginInformation -Domain \"target.com\"\n\n# Tenant GUID\nGet-AADIntTenantID -Domain \"target.com\"\n```\n\n### Step 2: External user enumeration (optional, noisy)\nValidate whether usernames exist via the GetCredentialType / autologon endpoints.\n\n``",
+      "nist_csf": [
+        "ID.AM-03"
+      ],
+      "tags": [
+        "['aadinternals'",
+        "'entra-id'",
+        "'azure-ad'",
+        "'saml-token-forgery'",
+        "'federation-backdoor'",
+        "'token-manipulation'",
+        "'adfs'",
+        "'red-team']"
+      ]
+    },
+    "M365-USR-001": {
+      "skill_name": "auditing-entra-id-with-aadinternals",
+      "mitre_id": "T1078.004",
+      "mitre_tactic": "Initial Access",
+      "remediation": "Enforce MFA registration via CA policy targeting all users. Enable Identity Protection risk-based policies. Consider enabling passwordless authentication (FIDO2, Windows Hello).",
+      "nist_csf": [
+        "ID.AM-03"
+      ],
+      "tags": [
+        "['aadinternals'",
+        "'entra-id'",
+        "'azure-ad'",
+        "'saml-token-forgery'",
+        "'federation-backdoor'",
+        "'token-manipulation'",
+        "'adfs'",
+        "'red-team']"
+      ]
+    },
+    "M365-USR-002": {
+      "skill_name": "auditing-entra-id-with-aadinternals",
+      "mitre_id": "T1087.004",
+      "mitre_tactic": "Discovery",
+      "remediation": "Review guest access. Set GuestUserRoleId = Restricted Guest User in External Identities settings. Implement Guest access reviews via Entra ID Access Reviews.",
+      "nist_csf": [
+        "ID.AM-03"
+      ],
+      "tags": [
+        "['aadinternals'",
+        "'entra-id'",
+        "'azure-ad'",
+        "'saml-token-forgery'",
+        "'federation-backdoor'",
+        "'token-manipulation'",
+        "'adfs'",
+        "'red-team']"
+      ]
+    },
+    "M365-SP-001": {
+      "skill_name": "detecting-suspicious-oauth-application-consent",
+      "mitre_id": "T1550.001",
+      "mitre_tactic": "Defense Evasion",
+      "remediation": "1. Authenticate to Microsoft Graph using MSAL client credentials flow\n2. Enumerate all OAuth2 permission grants via `/oauth2PermissionGrants`\n3. List service principals and their assigned application permissions\n4. Query directory audit logs for `Consent to application` events\n5. Flag applications with high-risk scopes (Mail.Read, Files.ReadWrite.All, etc.)\n6. Check publisher verification status for each application\n7. Generate risk report with remediation recommendations",
+      "nist_csf": [
+        "PR.IR-01",
+        "ID.AM-08",
+        "GV.SC-06",
+        "DE.CM-01"
+      ],
+      "tags": [
+        "['OAuth'",
+        "'Azure-AD'",
+        "'Entra-ID'",
+        "'Microsoft-Graph'",
+        "'illicit-consent'",
+        "'cloud-security'",
+        "'application-permissions']"
+      ]
+    },
+    "M365-ROLE-001": {
+      "skill_name": "auditing-entra-id-with-aadinternals",
+      "mitre_id": "T1078.004",
+      "mitre_tactic": "Initial Access",
+      "remediation": "Migrate all privileged roles to PIM Just-in-Time activation with approval workflow and MFA. Eliminate permanent Global Administrator assignments.",
+      "nist_csf": [
+        "ID.AM-03"
+      ],
+      "tags": [
+        "['aadinternals'",
+        "'entra-id'",
+        "'azure-ad'",
+        "'saml-token-forgery'",
+        "'federation-backdoor'",
+        "'token-manipulation'",
+        "'adfs'",
+        "'red-team']"
+      ]
+    },
+    "M365-EXO-001": {
+      "skill_name": "detecting-email-forwarding-rules-attack",
+      "mitre_id": "T1114.003",
+      "mitre_tactic": "Collection",
+      "remediation": "1. **Formulate Hypothesis**: Define a testable hypothesis based on threat intelligence or ATT&CK gap analysis.\n2. **Identify Data Sources**: Determine which logs and telemetry are needed to validate or refute the hypothesis.\n3. **Execute Queries**: Run detection queries against SIEM and EDR platforms to collect relevant events.\n4. **Analyze Results**: Examine query results for anomalies, correlating across multiple data sources.\n5. **Validate Findings**: Distinguish true positives from false positives through contextual analysis.\n6. **Correlate Activity**: Link findings to broader attack chain",
+      "nist_csf": [
+        "DE.CM-01",
+        "DE.AE-02",
+        "DE.AE-07",
+        "ID.RA-05"
+      ],
+      "tags": [
+        "['threat-hunting'",
+        "'mitre-attack'",
+        "'email-forwarding'",
+        "'persistence'",
+        "'bec'",
+        "'t1114'",
+        "'proactive-detection']"
+      ]
+    },
+    "M365-EXO-002": {
+      "skill_name": "auditing-entra-id-with-aadinternals",
+      "mitre_id": "T1078.004",
+      "mitre_tactic": "Initial Access",
+      "remediation": "Run: Get-CASMailbox -ResultSize Unlimited | Where {$_.SmtpClientAuthenticationDisabled -eq $false}. Disable SMTP AUTH per-mailbox and at org level unless required. Block via CA policy.",
+      "nist_csf": [
+        "ID.AM-03"
+      ],
+      "tags": [
+        "['aadinternals'",
+        "'entra-id'",
+        "'azure-ad'",
+        "'saml-token-forgery'",
+        "'federation-backdoor'",
+        "'token-manipulation'",
+        "'adfs'",
+        "'red-team']"
+      ]
+    },
+    "SPO-001": {
+      "skill_name": "hunting-saas-sso-token-abuse",
+      "mitre_id": "T1567.002",
+      "mitre_tactic": "Exfiltration",
+      "remediation": "Restrict to 'ExternalUserSharingOnly' or 'ExistingExternalUserSharingOnly'. Admin center: SharePoint → Policies → Sharing → 'New and existing guests'.",
+      "nist_csf": [
+        "DE.CM-01"
+      ],
+      "tags": [
+        "['threat-hunting'",
+        "'sso'",
+        "'oauth'",
+        "'token-theft'",
+        "'pass-the-cookie'",
+        "'entra-id'",
+        "'okta'",
+        "'detection-engineering']"
+      ]
+    },
+    "SPO-002": {
+      "skill_name": "hunting-saas-sso-token-abuse",
+      "mitre_id": "T1567.002",
+      "mitre_tactic": "Exfiltration",
+      "remediation": "Change default to 'Specific people' or 'Only people in your organization'. SharePoint Admin Center → Policies → Sharing → Default link type.",
+      "nist_csf": [
+        "DE.CM-01"
+      ],
+      "tags": [
+        "['threat-hunting'",
+        "'sso'",
+        "'oauth'",
+        "'token-theft'",
+        "'pass-the-cookie'",
+        "'entra-id'",
+        "'okta'",
+        "'detection-engineering']"
+      ]
+    },
+    "SPO-003": {
+      "skill_name": "hunting-saas-sso-token-abuse",
+      "mitre_id": "T1567.002",
+      "mitre_tactic": "Exfiltration",
+      "remediation": "Set expiration on anonymous links: SharePoint Admin Center → Sharing → set 'These links must expire within this many days' (30 days recommended).",
+      "nist_csf": [
+        "DE.CM-01"
+      ],
+      "tags": [
+        "['threat-hunting'",
+        "'sso'",
+        "'oauth'",
+        "'token-theft'",
+        "'pass-the-cookie'",
+        "'entra-id'",
+        "'okta'",
+        "'detection-engineering']"
+      ]
+    },
+    "SPO-004": {
+      "skill_name": "auditing-entra-id-with-aadinternals",
+      "mitre_id": "T1078.004",
+      "mitre_tactic": "Initial Access",
+      "remediation": "Disable legacy auth: SharePoint Admin Center → Settings → Legacy authentication → Off. Block via Conditional Access policy.",
+      "nist_csf": [
+        "ID.AM-03"
+      ],
+      "tags": [
+        "['aadinternals'",
+        "'entra-id'",
+        "'azure-ad'",
+        "'saml-token-forgery'",
+        "'federation-backdoor'",
+        "'token-manipulation'",
+        "'adfs'",
+        "'red-team']"
+      ]
+    },
+    "SPO-005": {
+      "skill_name": "hunting-saas-sso-token-abuse",
+      "mitre_id": "T1567.002",
+      "mitre_tactic": "Exfiltration",
+      "remediation": "Review each site in SharePoint Admin Center. Restrict sharing to authenticated users minimum. Apply sensitivity labels to high-value sites.",
+      "nist_csf": [
+        "DE.CM-01"
+      ],
+      "tags": [
+        "['threat-hunting'",
+        "'sso'",
+        "'oauth'",
+        "'token-theft'",
+        "'pass-the-cookie'",
+        "'entra-id'",
+        "'okta'",
+        "'detection-engineering']"
+      ]
+    },
+    "SPO-006": {
+      "skill_name": "hunting-saas-sso-token-abuse",
+      "mitre_id": "T1567.002",
+      "mitre_tactic": "Exfiltration",
+      "remediation": "Restrict OneDrive sharing to authenticated external users or org-only via SharePoint Admin Center → Settings → OneDrive.",
+      "nist_csf": [
+        "DE.CM-01"
+      ],
+      "tags": [
+        "['threat-hunting'",
+        "'sso'",
+        "'oauth'",
+        "'token-theft'",
+        "'pass-the-cookie'",
+        "'entra-id'",
+        "'okta'",
+        "'detection-engineering']"
+      ]
+    },
+    "SPO-INFO-001": {
+      "skill_name": null,
+      "mitre_id": null,
+      "mitre_tactic": null,
+      "remediation": "Check manually:\n• SharePoint Admin Center → Policies → Sharing\n• PowerShell: Get-SPOTenant | Select SharingCapability,DefaultSharingLinkType,RequireAnonymousLinksExpireInDays",
+      "nist_csf": null,
+      "tags": []
+    },
+    "TEAMS-001": {
+      "skill_name": "hunting-saas-sso-token-abuse",
+      "mitre_id": "T1566.003",
+      "mitre_tactic": "Initial Access",
+      "remediation": "Restrict external access to a whitelist of known partner domains. Teams Admin Center → Users → External access → Allow only specific external domains.",
+      "nist_csf": [
+        "DE.CM-01"
+      ],
+      "tags": [
+        "['threat-hunting'",
+        "'sso'",
+        "'oauth'",
+        "'token-theft'",
+        "'pass-the-cookie'",
+        "'entra-id'",
+        "'okta'",
+        "'detection-engineering']"
+      ]
+    },
+    "TEAMS-002": {
+      "skill_name": "hunting-saas-sso-token-abuse",
+      "mitre_id": "T1087.004",
+      "mitre_tactic": "Discovery",
+      "remediation": "If guest access is required, ensure guests cannot create/delete channels, add apps, or access sensitive teams. Teams Admin Center → Guest access → review per-capability toggles.",
+      "nist_csf": [
+        "DE.CM-01"
+      ],
+      "tags": [
+        "['threat-hunting'",
+        "'sso'",
+        "'oauth'",
+        "'token-theft'",
+        "'pass-the-cookie'",
+        "'entra-id'",
+        "'okta'",
+        "'detection-engineering']"
+      ]
+    },
+    "TEAMS-003": {
+      "skill_name": "hunting-saas-sso-token-abuse",
+      "mitre_id": "T1566.003",
+      "mitre_tactic": "Initial Access",
+      "remediation": "Disable communication with unmanaged accounts: Teams Admin Center → Users → External access → toggle off 'Teams accounts not managed by an organization'.",
+      "nist_csf": [
+        "DE.CM-01"
+      ],
+      "tags": [
+        "['threat-hunting'",
+        "'sso'",
+        "'oauth'",
+        "'token-theft'",
+        "'pass-the-cookie'",
+        "'entra-id'",
+        "'okta'",
+        "'detection-engineering']"
+      ]
+    },
+    "TEAMS-004": {
+      "skill_name": "hunting-saas-sso-token-abuse",
+      "mitre_id": "T1087.004",
+      "mitre_tactic": "Discovery",
+      "remediation": "Review public teams. Set sensitive teams to Private. Consider HiddenMembership for leadership teams.",
+      "nist_csf": [
+        "DE.CM-01"
+      ],
+      "tags": [
+        "['threat-hunting'",
+        "'sso'",
+        "'oauth'",
+        "'token-theft'",
+        "'pass-the-cookie'",
+        "'entra-id'",
+        "'okta'",
+        "'detection-engineering']"
+      ]
+    },
+    "TEAMS-005": {
+      "skill_name": "hunting-saas-sso-token-abuse",
+      "mitre_id": "T1087.004",
+      "mitre_tactic": "Discovery",
+      "remediation": "Audit guest membership per team. Remove unauthorized guests. Apply sensitivity labels to restrict guest access to confidential teams.",
+      "nist_csf": [
+        "DE.CM-01"
+      ],
+      "tags": [
+        "['threat-hunting'",
+        "'sso'",
+        "'oauth'",
+        "'token-theft'",
+        "'pass-the-cookie'",
+        "'entra-id'",
+        "'okta'",
+        "'detection-engineering']"
+      ]
+    },
+    "TEAMS-006": {
+      "skill_name": "hunting-saas-sso-token-abuse",
+      "mitre_id": "T1566.003",
+      "mitre_tactic": "Initial Access",
+      "remediation": "Disable anonymous join: Teams Admin Center → Meetings → Meeting policies → Global policy → 'Allow anonymous users to join a meeting' → Off.",
+      "nist_csf": [
+        "DE.CM-01"
+      ],
+      "tags": [
+        "['threat-hunting'",
+        "'sso'",
+        "'oauth'",
+        "'token-theft'",
+        "'pass-the-cookie'",
+        "'entra-id'",
+        "'okta'",
+        "'detection-engineering']"
+      ]
+    },
+    "TEAMS-007": {
+      "skill_name": "detecting-suspicious-oauth-application-consent",
+      "mitre_id": "T1550.001",
+      "mitre_tactic": "Defense Evasion",
+      "remediation": "Restrict to approved apps only: Teams Admin Center → Teams apps → Permission policies → Block all apps except approved list. Review existing app grants.",
+      "nist_csf": [
+        "PR.IR-01",
+        "ID.AM-08",
+        "GV.SC-06",
+        "DE.CM-01"
+      ],
+      "tags": [
+        "['OAuth'",
+        "'Azure-AD'",
+        "'Entra-ID'",
+        "'Microsoft-Graph'",
+        "'illicit-consent'",
+        "'cloud-security'",
+        "'application-permissions']"
+      ]
+    },
+    "TEAMS-008": {
+      "skill_name": "detecting-suspicious-oauth-application-consent",
+      "mitre_id": "T1550.001",
+      "mitre_tactic": "Defense Evasion",
+      "remediation": "Disable custom app upload for regular users. Allow only for specific developer accounts via app setup policies.",
+      "nist_csf": [
+        "PR.IR-01",
+        "ID.AM-08",
+        "GV.SC-06",
+        "DE.CM-01"
+      ],
+      "tags": [
+        "['OAuth'",
+        "'Azure-AD'",
+        "'Entra-ID'",
+        "'Microsoft-Graph'",
+        "'illicit-consent'",
+        "'cloud-security'",
+        "'application-permissions']"
+      ]
+    },
+    "WEB-DNS-GENERIC": {
+      "skill_name": null,
+      "mitre_id": "T1566.001",
+      "mitre_tactic": "Initial Access",
+      "remediation": "Configure SPF -all, DKIM selector1/selector2, DMARC p=reject.",
+      "nist_csf": null,
+      "tags": []
+    },
+    "WEB-TLS-GENERIC": {
+      "skill_name": null,
+      "mitre_id": "T1557.002",
+      "mitre_tactic": "Collection",
+      "remediation": "Disable TLS ≤1.1, SSLv3, weak ciphers. Enable TLS 1.3. Use ECDHE cipher suites. Renew certificates before expiry.",
+      "nist_csf": null,
+      "tags": []
+    },
+    "WEB-HDR-MISSING": {
+      "skill_name": null,
+      "mitre_id": null,
+      "mitre_tactic": null,
+      "remediation": "",
+      "nist_csf": null,
+      "tags": []
+    },
+    "WEB-REDIRECT-GENERIC": {
+      "skill_name": null,
+      "mitre_id": "T1557",
+      "mitre_tactic": "Collection",
+      "remediation": "Configure HTTP (port 80) to return 301 redirect to https://. Enforce HSTS.",
+      "nist_csf": null,
+      "tags": []
+    }
+  }
+}

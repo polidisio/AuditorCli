@@ -1,0 +1,155 @@
+# AuditorCli check → skill mapping
+# mitre_id here takes precedence over what's in the skill's frontmatter.
+# remediation_override: if set, used as-is; if null, derived from the skill's
+#   ## Workflow / ## Detection and OPSEC Notes / ## Validation Criteria section.
+
+# ── Entra ID / Conditional Access ─────────────────────────────────────────────
+
+M365-CA-001:
+  skill: auditing-entra-id-with-aadinternals
+  mitre_id: T1078.004
+  remediation_override: null
+
+M365-CA-002:
+  skill: auditing-entra-id-with-aadinternals
+  mitre_id: T1078.004
+  remediation_override: null
+
+# ── Entra ID / Users ───────────────────────────────────────────────────────────
+
+M365-USR-001:
+  skill: auditing-entra-id-with-aadinternals
+  mitre_id: T1078.004
+  remediation_override: "Enforce MFA registration via CA policy targeting all users. Enable Identity Protection risk-based policies. Consider enabling passwordless authentication (FIDO2, Windows Hello)."
+
+M365-USR-002:
+  skill: auditing-entra-id-with-aadinternals
+  mitre_id: T1087.004
+  remediation_override: "Review guest access. Set GuestUserRoleId = Restricted Guest User in External Identities settings. Implement Guest access reviews via Entra ID Access Reviews."
+
+# ── Entra ID / Service Principals ─────────────────────────────────────────────
+
+M365-SP-001:
+  skill: detecting-suspicious-oauth-application-consent
+  mitre_id: T1550.001
+  remediation_override: null
+
+# ── Entra ID / Privileged Roles ───────────────────────────────────────────────
+
+M365-ROLE-001:
+  skill: auditing-entra-id-with-aadinternals
+  mitre_id: T1078.004
+  remediation_override: "Migrate all privileged roles to PIM Just-in-Time activation with approval workflow and MFA. Eliminate permanent Global Administrator assignments."
+
+# ── Exchange Online ────────────────────────────────────────────────────────────
+
+M365-EXO-001:
+  skill: detecting-email-forwarding-rules-attack
+  mitre_id: T1114.003
+  remediation_override: null
+
+M365-EXO-002:
+  skill: auditing-entra-id-with-aadinternals
+  mitre_id: T1078.004
+  remediation_override: "Run: Get-CASMailbox -ResultSize Unlimited | Where {$_.SmtpClientAuthenticationDisabled -eq $false}. Disable SMTP AUTH per-mailbox and at org level unless required. Block via CA policy."
+
+# ── SharePoint Online ──────────────────────────────────────────────────────────
+
+SPO-001:
+  skill: hunting-saas-sso-token-abuse
+  mitre_id: T1567.002
+  remediation_override: "Restrict to 'ExternalUserSharingOnly' or 'ExistingExternalUserSharingOnly'. Admin center: SharePoint → Policies → Sharing → 'New and existing guests'."
+
+SPO-002:
+  skill: hunting-saas-sso-token-abuse
+  mitre_id: T1567.002
+  remediation_override: "Change default to 'Specific people' or 'Only people in your organization'. SharePoint Admin Center → Policies → Sharing → Default link type."
+
+SPO-003:
+  skill: hunting-saas-sso-token-abuse
+  mitre_id: T1567.002
+  remediation_override: "Set expiration on anonymous links: SharePoint Admin Center → Sharing → set 'These links must expire within this many days' (30 days recommended)."
+
+SPO-004:
+  skill: auditing-entra-id-with-aadinternals
+  mitre_id: T1078.004
+  remediation_override: "Disable legacy auth: SharePoint Admin Center → Settings → Legacy authentication → Off. Block via Conditional Access policy."
+
+SPO-005:
+  skill: hunting-saas-sso-token-abuse
+  mitre_id: T1567.002
+  remediation_override: "Review each site in SharePoint Admin Center. Restrict sharing to authenticated users minimum. Apply sensitivity labels to high-value sites."
+
+SPO-006:
+  skill: hunting-saas-sso-token-abuse
+  mitre_id: T1567.002
+  remediation_override: "Restrict OneDrive sharing to authenticated external users or org-only via SharePoint Admin Center → Settings → OneDrive."
+
+SPO-INFO-001:
+  skill: null
+  mitre_id: null
+  remediation_override: "Check manually:\n• SharePoint Admin Center → Policies → Sharing\n• PowerShell: Get-SPOTenant | Select SharingCapability,DefaultSharingLinkType,RequireAnonymousLinksExpireInDays"
+
+# ── Microsoft Teams ────────────────────────────────────────────────────────────
+
+TEAMS-001:
+  skill: hunting-saas-sso-token-abuse
+  mitre_id: T1566.003
+  remediation_override: "Restrict external access to a whitelist of known partner domains. Teams Admin Center → Users → External access → Allow only specific external domains."
+
+TEAMS-002:
+  skill: hunting-saas-sso-token-abuse
+  mitre_id: T1087.004
+  remediation_override: "If guest access is required, ensure guests cannot create/delete channels, add apps, or access sensitive teams. Teams Admin Center → Guest access → review per-capability toggles."
+
+TEAMS-003:
+  skill: hunting-saas-sso-token-abuse
+  mitre_id: T1566.003
+  remediation_override: "Disable communication with unmanaged accounts: Teams Admin Center → Users → External access → toggle off 'Teams accounts not managed by an organization'."
+
+TEAMS-004:
+  skill: hunting-saas-sso-token-abuse
+  mitre_id: T1087.004
+  remediation_override: "Review public teams. Set sensitive teams to Private. Consider HiddenMembership for leadership teams."
+
+TEAMS-005:
+  skill: hunting-saas-sso-token-abuse
+  mitre_id: T1087.004
+  remediation_override: "Audit guest membership per team. Remove unauthorized guests. Apply sensitivity labels to restrict guest access to confidential teams."
+
+TEAMS-006:
+  skill: hunting-saas-sso-token-abuse
+  mitre_id: T1566.003
+  remediation_override: "Disable anonymous join: Teams Admin Center → Meetings → Meeting policies → Global policy → 'Allow anonymous users to join a meeting' → Off."
+
+TEAMS-007:
+  skill: detecting-suspicious-oauth-application-consent
+  mitre_id: T1550.001
+  remediation_override: "Restrict to approved apps only: Teams Admin Center → Teams apps → Permission policies → Block all apps except approved list. Review existing app grants."
+
+TEAMS-008:
+  skill: detecting-suspicious-oauth-application-consent
+  mitre_id: T1550.001
+  remediation_override: "Disable custom app upload for regular users. Allow only for specific developer accounts via app setup policies."
+
+# ── Web — template keys (used by dynamic findings in cli.py) ──────────────────
+
+WEB-DNS-GENERIC:
+  skill: null
+  mitre_id: T1566.001
+  remediation_override: "Configure SPF -all, DKIM selector1/selector2, DMARC p=reject."
+
+WEB-TLS-GENERIC:
+  skill: null
+  mitre_id: T1557.002
+  remediation_override: "Disable TLS ≤1.1, SSLv3, weak ciphers. Enable TLS 1.3. Use ECDHE cipher suites. Renew certificates before expiry."
+
+WEB-HDR-MISSING:
+  skill: null
+  mitre_id: null
+  remediation_override: null
+
+WEB-REDIRECT-GENERIC:
+  skill: null
+  mitre_id: T1557
+  remediation_override: "Configure HTTP (port 80) to return 301 redirect to https://. Enforce HSTS."

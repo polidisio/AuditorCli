@@ -10,6 +10,7 @@ import typer
 from rich.prompt import Confirm
 
 from auditor.config import get_settings
+from auditor.knowledge import registry as _kr
 from auditor.models import AuditSession, AuditTarget
 from auditor.utils.console import console, print_banner, print_findings_table, print_step, print_ok, print_err, print_warn
 from auditor.utils.validators import validate_domain
@@ -25,10 +26,12 @@ app = typer.Typer(
 web_app = typer.Typer(help="Web application and network reconnaissance")
 m365_app = typer.Typer(help="M365 / Entra ID tenant audit")
 report_app = typer.Typer(help="Report generation")
+knowledge_app = typer.Typer(help="Knowledge base management")
 
 app.add_typer(web_app, name="web")
 app.add_typer(m365_app, name="m365")
 app.add_typer(report_app, name="report")
+app.add_typer(knowledge_app, name="knowledge")
 
 
 # ─── Web commands ─────────────────────────────────────────────────────────────
@@ -117,6 +120,7 @@ async def _web_recon_async(
     dns_records = check_dns_records(domain)
     dns_issues = analyze_dmarc(dns_records)
 
+    _dns_c = _kr.get("WEB-DNS-GENERIC")
     for issue in dns_issues:
         print_warn(issue)
         finding = Finding(
@@ -124,11 +128,12 @@ async def _web_recon_async(
             title=issue,
             component="DNS / Email Security",
             vector="Email spoofing / phishing — missing or weak email authentication",
-            mitre_id="T1566.001",
+            mitre_id=(_dns_c.mitre_id if _dns_c else None) or "T1566.001",
+            mitre_tactic=_dns_c.mitre_tactic if _dns_c else None,
             severity=Severity.HIGH,
             priority=Priority.MEDIUM,
             description=issue,
-            remediation="Configure SPF -all, DKIM selector1/selector2, DMARC p=reject.",
+            remediation=(_dns_c.remediation if _dns_c else None) or "Configure SPF -all, DKIM selector1/selector2, DMARC p=reject.",
         )
         session.add_finding(finding)
 
@@ -155,6 +160,10 @@ async def _web_recon_async(
                 return rem
         return "Review and apply recommended security header configuration."
 
+    _hdr_c = _kr.get("WEB-HDR-MISSING")
+    _tls_c = _kr.get("WEB-TLS-GENERIC")
+    _redir_c = _kr.get("WEB-REDIRECT-GENERIC")
+
     for hr in header_results:
         all_header_issues = hr.missing_headers + hr.hsts_issues + hr.cookie_issues
         for raw_issue in all_header_issues:
@@ -169,7 +178,8 @@ async def _web_recon_async(
                 title=msg,
                 component=f"Web Headers — {hr.url}",
                 vector="HTTP response headers — missing or misconfigured security controls",
-                mitre_id=None,
+                mitre_id=_hdr_c.mitre_id if _hdr_c else None,
+                mitre_tactic=_hdr_c.mitre_tactic if _hdr_c else None,
                 severity=sev,
                 priority=pri,
                 description=msg,
@@ -188,11 +198,12 @@ async def _web_recon_async(
                 title=msg,
                 component=f"TLS/Certificate — {hr.url}",
                 vector="TLS configuration — weak protocols, ciphers, or certificate issues",
-                mitre_id="T1557.002",
+                mitre_id=(_tls_c.mitre_id if _tls_c else None) or "T1557.002",
+                mitre_tactic=_tls_c.mitre_tactic if _tls_c else None,
                 severity=sev,
                 priority=pri,
                 description=msg,
-                remediation=_HEADER_REMEDIATIONS["TLS"],
+                remediation=(_tls_c.remediation if _tls_c else None) or _HEADER_REMEDIATIONS["TLS"],
             ))
 
         if hr.redirect_issue:
@@ -204,11 +215,12 @@ async def _web_recon_async(
                 title=msg,
                 component=f"HTTP Redirect — {hr.url}",
                 vector="Plaintext HTTP access allowed — no forced redirect to HTTPS",
-                mitre_id="T1557",
+                mitre_id=(_redir_c.mitre_id if _redir_c else None) or "T1557",
+                mitre_tactic=_redir_c.mitre_tactic if _redir_c else None,
                 severity=sev,
                 priority=pri,
                 description=msg,
-                remediation=_HEADER_REMEDIATIONS["redirect"],
+                remediation=(_redir_c.remediation if _redir_c else None) or _HEADER_REMEDIATIONS["redirect"],
             ))
 
     # Active recon
@@ -407,6 +419,39 @@ def report_export(
 
     out_path = save_report(session, out_dir, fmt)
     print_ok(f"Exported [{fmt}]: {out_path}")
+
+
+# ─── Knowledge commands ────────────────────────────────────────────────────────
+
+@knowledge_app.command("update")
+def knowledge_update() -> None:
+    """Rebuild skills_index.json from the skills/ git submodule."""
+    from auditor.knowledge.loader import build_index, DEFAULT_SKILLS_DIR, DEFAULT_MAP_PATH, DEFAULT_INDEX_PATH
+    print_step("Rebuilding knowledge index from skills submodule...")
+    build_index(DEFAULT_SKILLS_DIR, DEFAULT_MAP_PATH, DEFAULT_INDEX_PATH)
+    import json
+    data = json.loads(DEFAULT_INDEX_PATH.read_text())
+    count = len(data.get("checks", {}))
+    commit = data.get("_meta", {}).get("skills_commit") or "no submodule"
+    print_ok(f"Knowledge index updated: {count} checks, skills commit: {commit[:12] if commit != 'no submodule' else commit}")
+
+
+@knowledge_app.command("status")
+def knowledge_status() -> None:
+    """Show knowledge index status."""
+    from auditor.knowledge.loader import DEFAULT_INDEX_PATH
+    import json
+    if not DEFAULT_INDEX_PATH.exists():
+        print_err("skills_index.json not found — run: auditor knowledge update")
+        raise typer.Exit(1)
+    data = json.loads(DEFAULT_INDEX_PATH.read_text())
+    meta = data.get("_meta", {})
+    count = len(data.get("checks", {}))
+    console.print(f"  Checks      : [bold]{count}[/]")
+    console.print(f"  Skills repo : {meta.get('skills_repo', '?')}")
+    console.print(f"  Commit      : {meta.get('skills_commit') or 'not initialized'}")
+    console.print(f"  Generated   : {meta.get('generated_at', '?')}")
+    console.print(f"  Registry    : [bold]{len(_kr)}[/] entries loaded")
 
 
 @app.callback(invoke_without_command=True)

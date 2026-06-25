@@ -1,6 +1,7 @@
 """Entra ID / Azure AD audit checks via Microsoft Graph."""
 from __future__ import annotations
 
+from auditor.knowledge import registry as _kr
 from auditor.models import Finding, Priority, Severity
 from auditor.modules.m365.graph import GraphClient
 from auditor.utils.console import print_step, print_ok, print_warn
@@ -26,32 +27,36 @@ async def audit_conditional_access(client: GraphClient) -> list[Finding]:
     )
 
     if not legacy_blocked:
+        _c = _kr.get("M365-CA-001")
         findings.append(Finding(
             id="M365-CA-001",
             title="Legacy Authentication Not Blocked by CA Policy",
             component="Entra ID — Conditional Access",
             vector="Legacy auth protocols (SMTP AUTH, POP3, IMAP) bypass MFA",
-            mitre_id="T1078.004",
+            mitre_id=(_c.mitre_id if _c else None) or "T1078.004",
+            mitre_tactic=_c.mitre_tactic if _c else None,
             severity=Severity.CRITICAL,
             priority=Priority.HIGH,
             description="No Conditional Access policy found blocking legacy authentication protocols. "
                         "Legacy auth bypasses MFA entirely, enabling password spray and credential stuffing attacks.",
-            remediation="Create CA policy: Conditions → Client apps → Exchange ActiveSync + Other clients → Block",
+            remediation=(_c.remediation if _c else None) or "Create CA policy: Conditions → Client apps → Exchange ActiveSync + Other clients → Block",
         ))
 
     # Check if any policy is in report-only mode (not enforcing)
     report_only = [p for p in policies if p.get("state") == "enabledForReportingButNotEnforcing"]
     if report_only:
+        _c = _kr.get("M365-CA-002")
         findings.append(Finding(
             id="M365-CA-002",
             title=f"{len(report_only)} CA Policies in Report-Only Mode",
             component="Entra ID — Conditional Access",
             vector="Policies not enforced — controls appear configured but don't block access",
-            mitre_id="T1078.004",
+            mitre_id=(_c.mitre_id if _c else None) or "T1078.004",
+            mitre_tactic=_c.mitre_tactic if _c else None,
             severity=Severity.MEDIUM,
             priority=Priority.MEDIUM,
             description=f"Policies: {', '.join(p.get('displayName','?') for p in report_only)}",
-            remediation="Switch report-only policies to Enabled after impact review",
+            remediation=(_c.remediation if _c else None) or "Switch report-only policies to Enabled after impact review",
         ))
 
     return findings
@@ -70,17 +75,19 @@ async def audit_users(client: GraphClient) -> list[Finding]:
         if users_without_mfa:
             count = len(users_without_mfa)
             print_warn(f"{count} users without MFA registered")
+            _c = _kr.get("M365-USR-001")
             findings.append(Finding(
                 id="M365-USR-001",
                 title=f"{count} Enabled Users Without MFA Registration",
                 component="Entra ID — Users",
                 vector="Accounts accessible with password only — no second factor",
-                mitre_id="T1078.004",
+                mitre_id=(_c.mitre_id if _c else None) or "T1078.004",
+                mitre_tactic=_c.mitre_tactic if _c else None,
                 severity=Severity.HIGH,
                 priority=Priority.HIGH,
                 description=f"{count} enabled users have not registered any MFA method.",
                 evidence=f"Sample UPNs: {', '.join(u.get('userPrincipalName','?') for u in users_without_mfa[:5])}",
-                remediation="Enforce MFA registration via CA policy + Identity Protection",
+                remediation=(_c.remediation if _c else None) or "Enforce MFA registration via CA policy + Identity Protection",
             ))
     except Exception as e:
         print_warn(f"Could not fetch MFA registration data: {e}")
@@ -89,17 +96,19 @@ async def audit_users(client: GraphClient) -> list[Finding]:
     guests = await client.get_all_pages("/users?$filter=userType eq 'Guest'&$select=displayName,userPrincipalName,createdDateTime")
     if guests:
         print_warn(f"{len(guests)} guest users in tenant")
+        _c = _kr.get("M365-USR-002")
         findings.append(Finding(
             id="M365-USR-002",
             title=f"{len(guests)} Guest Users in Tenant",
             component="Entra ID — External Access",
             vector="Guest users can enumerate directory and access shared resources",
-            mitre_id="T1087.004",
+            mitre_id=(_c.mitre_id if _c else None) or "T1087.004",
+            mitre_tactic=_c.mitre_tactic if _c else None,
             severity=Severity.MEDIUM,
             priority=Priority.MEDIUM,
             description=f"Tenant has {len(guests)} guest users. Verify each is authorized and has minimal permissions.",
             evidence=f"Sample: {', '.join(u.get('userPrincipalName','?') for u in guests[:5])}",
-            remediation="Review guest access. Set GuestUserRoleId = Restricted Guest User in External Identities settings.",
+            remediation=(_c.remediation if _c else None) or "Review guest access. Set GuestUserRoleId = Restricted Guest User in External Identities settings.",
         ))
 
     return findings
@@ -128,16 +137,18 @@ async def audit_service_principals(client: GraphClient) -> list[Finding]:
         grants = await client.get_all_pages("/oauth2PermissionGrants")
         app_grants = [g for g in grants if g.get("consentType") == "AllPrincipals"]
         if app_grants:
+            _c = _kr.get("M365-SP-001")
             findings.append(Finding(
                 id="M365-SP-001",
                 title=f"{len(app_grants)} OAuth Apps with Tenant-Wide Consent",
                 component="Entra ID — Service Principals",
                 vector="Illicit consent grant — apps can access all users' data",
-                mitre_id="T1550.001",
+                mitre_id=(_c.mitre_id if _c else None) or "T1550.001",
+                mitre_tactic=_c.mitre_tactic if _c else None,
                 severity=Severity.HIGH,
                 priority=Priority.HIGH,
                 description=f"{len(app_grants)} apps have tenant-wide (AllPrincipals) OAuth consent grants.",
-                remediation="Review each grant at Entra ID → Enterprise Apps → Permissions. Revoke unauthorized grants.",
+                remediation=(_c.remediation if _c else None) or "Review each grant at Entra ID → Enterprise Apps → Permissions. Revoke unauthorized grants.",
             ))
     except Exception as e:
         print_warn(f"Could not fetch OAuth grants: {e}")
@@ -179,17 +190,19 @@ async def audit_privileged_roles(client: GraphClient) -> list[Finding]:
 
     if permanent_admins:
         print_warn(f"{len(permanent_admins)} permanent privileged role assignments found")
+        _c = _kr.get("M365-ROLE-001")
         findings.append(Finding(
             id="M365-ROLE-001",
             title=f"{len(permanent_admins)} Permanent Privileged Role Assignments (No PIM)",
             component="Entra ID — Privileged Roles",
             vector="Permanent admin assignments — compromised account = persistent Global Admin",
-            mitre_id="T1078.004",
+            mitre_id=(_c.mitre_id if _c else None) or "T1078.004",
+            mitre_tactic=_c.mitre_tactic if _c else None,
             severity=Severity.HIGH,
             priority=Priority.HIGH,
             description=f"Roles assigned permanently (not via PIM JIT): "
                         + ", ".join(f"{a['principal']} ({a['role']})" for a in permanent_admins[:5]),
-            remediation="Migrate all privileged roles to PIM Just-in-Time activation with approval workflow and MFA.",
+            remediation=(_c.remediation if _c else None) or "Migrate all privileged roles to PIM Just-in-Time activation with approval workflow and MFA.",
         ))
 
     return findings

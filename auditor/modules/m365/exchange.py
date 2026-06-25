@@ -1,6 +1,7 @@
 """Exchange Online audit checks via Microsoft Graph."""
 from __future__ import annotations
 
+from auditor.knowledge import registry as _kr
 from auditor.models import Finding, Priority, Severity
 from auditor.modules.m365.graph import GraphClient
 from auditor.utils.console import print_step, print_ok, print_warn
@@ -38,17 +39,19 @@ async def audit_exchange(access_token: str) -> list[Finding]:
 
         if forwarding_count:
             print_warn(f"{forwarding_count} users with external forwarding rules")
+            _c = _kr.get("M365-EXO-001")
             findings.append(Finding(
                 id="M365-EXO-001",
                 title=f"{forwarding_count} Mailboxes with External Forwarding Rules",
                 component="Exchange Online — Inbox Rules",
                 vector="BEC persistence — attacker forwards all mail to external address silently",
-                mitre_id="T1114.003",
+                mitre_id=(_c.mitre_id if _c else None) or "T1114.003",
+                mitre_tactic=_c.mitre_tactic if _c else None,
                 severity=Severity.HIGH,
                 priority=Priority.HIGH,
                 description=f"Inbox forwarding rules (ForwardTo/RedirectTo) found on: "
                             f"{', '.join(forwarding_users[:5])}{'...' if len(forwarding_users) > 5 else ''}",
-                remediation="Investigate each rule. Disable external auto-forwarding at org level via transport rule.",
+                remediation=(_c.remediation if _c else None) or "Investigate each rule. Disable external auto-forwarding at org level via transport rule.",
             ))
         else:
             print_ok("No external forwarding rules found")
@@ -65,17 +68,19 @@ async def audit_exchange(access_token: str) -> list[Finding]:
         )
         # This endpoint won't give SMTP auth directly; noted as limitation
         print_warn("SMTP AUTH per-mailbox audit requires PowerShell (Exchange Online module)")
+        _c = _kr.get("M365-EXO-002")
         findings.append(Finding(
             id="M365-EXO-002",
             title="SMTP AUTH Status Requires PowerShell Verification",
             component="Exchange Online — Legacy Auth",
             vector="SMTP AUTH enabled per-mailbox bypasses CA and MFA",
-            mitre_id="T1078.004",
+            mitre_id=(_c.mitre_id if _c else None) or "T1078.004",
+            mitre_tactic=_c.mitre_tactic if _c else None,
             severity=Severity.MEDIUM,
             priority=Priority.MEDIUM,
             description="SMTP AUTH per-mailbox configuration cannot be fully verified via Graph API. "
                         "PowerShell audit required.",
-            remediation="Run: Get-CASMailbox -ResultSize Unlimited | Where {$_.SmtpClientAuthenticationDisabled -eq $false}",
+            remediation=(_c.remediation if _c else None) or "Run: Get-CASMailbox -ResultSize Unlimited | Where {$_.SmtpClientAuthenticationDisabled -eq $false}",
         ))
     except Exception:
         pass
