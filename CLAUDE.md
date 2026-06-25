@@ -4,12 +4,12 @@
 CLI tool para auditorías de seguridad: reconocimiento, enumeración y análisis de vulnerabilidades en aplicaciones web, servicios de red y tenants M365/Entra ID.
 
 ## Tipo
-CLI Tool — Python/Shell (TBD según stack elegido)
+CLI Tool — Python
 
 ## Tech Stack
-- **Lenguaje:** TBD (Python / Go / Shell)
-- **Framework:** TBD
-- **Dependencies clave:** Por definir al inicializar
+- **Lenguaje:** Python 3.11+
+- **Framework:** Typer + Rich
+- **Dependencies clave:** msal, httpx, pydantic, pyyaml, openpyxl, dnspython
 - **Platform:** macOS / Linux
 
 ## Repository
@@ -20,11 +20,17 @@ CLI Tool — Python/Shell (TBD según stack elegido)
 ## Quick Start
 
 ```bash
-# Setup
-pip install -r requirements.txt   # o: go mod download
+# Setup (incluye submodule de skills)
+git clone --recurse-submodules https://github.com/polidisio/AuditorCli.git
+cd AuditorCli
+python3.11 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+
+# Generar knowledge index desde submodule
+auditor knowledge update
 
 # Run — Web recon
-./auditor recon --target dominio.com
+auditor web recon --target dominio.com --passive-only
 
 # Run — M365 audit (requiere app registration propia en Entra ID)
 export AUDITOR_CLIENT_ID="<Application ID de tu app registration>"
@@ -42,15 +48,22 @@ pytest tests/
 ```
 AuditorCli/
 ├── auditor/
+│   ├── knowledge/            ← capa de conocimiento (MITRE, remediación)
+│   │   ├── __init__.py       ← CheckEntry, CheckRegistry, registry singleton
+│   │   ├── loader.py         ← genera skills_index.json desde submodule
+│   │   ├── check_map.yaml    ← mapeo check_id → skill + MITRE ID canónico
+│   │   └── skills_index.json ← índice generado (seed commiteado)
 │   ├── modules/
-│   │   ├── web/          ← reconocimiento web / network
-│   │   ├── m365/         ← enumeración Entra ID / M365
-│   │   └── report/       ← generación de reportes
-│   ├── cli.py            ← entry point (Click/Typer)
-│   └── config.py         ← configuración global
+│   │   ├── web/              ← reconocimiento web / network
+│   │   ├── m365/             ← enumeración Entra ID / M365
+│   │   └── report/           ← generación de reportes
+│   ├── cli.py                ← entry point (Typer)
+│   └── config.py             ← configuración global
+├── scripts/
+│   └── setup-entra-app.ps1   ← crea app registration en Entra ID (PowerShell)
+├── skills/                   ← git submodule: mukul975/Anthropic-Cybersecurity-Skills
 ├── tests/
-├── docs/
-└── CLAUDE.md             ← Este archivo
+└── CLAUDE.md                 ← Este archivo
 ```
 
 ---
@@ -64,6 +77,7 @@ CLI modules → Runner → Output (JSON/Markdown/HTML)
 1. **Web Recon** — subdomain enum, port scan, endpoint fuzzing, vuln scan
 2. **M365 Audit** — Entra ID, Exchange, SharePoint, Teams (Graph API)
 3. **Report** — generación de reporte estructurado con matriz de priorización
+4. **Knowledge** — capa de enriquecimiento MITRE/remediación desde skill repo
 
 ### Web módulos (`auditor/modules/web/`)
 | Archivo | Responsabilidad |
@@ -83,13 +97,29 @@ CLI modules → Runner → Output (JSON/Markdown/HTML)
 | `sharepoint.py` | Sharing level, anonymous links, site collections, OneDrive |
 | `teams.py` | External access, guest access, meetings, 3rd-party apps |
 
-### Reference Skills (mukul975/Anthropic-Cybersecurity-Skills)
-- `skills/auditing-entra-id-with-aadinternals`
-- `skills/attacking-entra-id-with-roadtools`
-- `skills/detecting-suspicious-oauth-application-consent`
-- `skills/detecting-email-forwarding-rules-attack`
-- `skills/analyzing-office365-audit-logs-for-compromise`
-- `skills/hunting-saas-sso-token-abuse`
+### Knowledge Layer (`auditor/knowledge/`)
+Git submodule `skills/` apunta a `mukul975/Anthropic-Cybersecurity-Skills` (817 skills).
+
+| Archivo | Responsabilidad |
+|---------|----------------|
+| `check_map.yaml` | Mapeo curado: check_id → skill + MITRE ID canónico + remediation_override |
+| `loader.py` | Parsea frontmatter YAML + secciones `## Workflow` de cada SKILL.md → genera `skills_index.json`. Idempotente por commit hash |
+| `__init__.py` | `CheckEntry` dataclass + `CheckRegistry` + singleton `registry` cargado al importar |
+| `skills_index.json` | Índice generado (seed commiteado — funciona sin `git submodule init`) |
+
+**Skills activas:**
+- `auditing-entra-id-with-aadinternals` → CA-001/002, USR-001/002, ROLE-001, EXO-002
+- `detecting-suspicious-oauth-application-consent` → SP-001, TEAMS-007/008
+- `detecting-email-forwarding-rules-attack` → EXO-001
+- `hunting-saas-sso-token-abuse` → SPO-001..006, TEAMS-001..006
+- `attacking-entra-id-with-roadtools` *(pendiente Phase 5)*
+- `analyzing-office365-audit-logs-for-compromise` *(pendiente Phase 5)*
+
+**Actualizar índice tras pull del submodule:**
+```bash
+git submodule update --remote skills
+auditor knowledge update
+```
 
 ---
 
@@ -182,10 +212,11 @@ auditor m365-audit --verbose --dry-run
 - [x] Phase 4: Report generator (Markdown + JSON + Excel)
 - [x] Phase 4b: Web security headers + HSTS + TLS/cipher + cookie audit (`headers.py`)
 - [x] Phase 4c: Bugfixes — f-string SyntaxError (`entra.py`), Azure CLI app ID fallback removido (`auth.py`)
+- [x] Phase 4d: Knowledge layer — `auditor/knowledge/` + git submodule skills + `mitre_tactic` en `Finding` + `auditor knowledge update/status`
 - [ ] Phase 5: Output HTML + ROADtools/AADInternals integration
 
 ---
 
 ## Contact
 **Owner:** Jose Maudisio (@polidisio)
-**Last updated:** 2026-06-25
+**Last updated:** 2026-06-25 (knowledge layer)

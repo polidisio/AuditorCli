@@ -9,8 +9,12 @@ CLI de auditoría de seguridad para aplicaciones web, servicios de red y tenants
 **Requisitos:** Python 3.11+, pip
 
 ```bash
-git clone https://github.com/polidisio/AuditorCli.git
+# Clonar incluyendo el submodule de skills (recomendado)
+git clone --recurse-submodules https://github.com/polidisio/AuditorCli.git
 cd AuditorCli
+
+# Si ya clonaste sin --recurse-submodules:
+git submodule update --init --recursive
 
 # Crear entorno virtual
 python3.11 -m venv .venv
@@ -19,6 +23,9 @@ source .venv/bin/activate   # macOS/Linux
 
 # Instalar en modo editable con dev deps
 pip install -e ".[dev]"
+
+# Generar knowledge index (enriquece findings con MITRE/remediación de las skills)
+auditor knowledge update
 
 # Verificar
 auditor --version
@@ -53,11 +60,15 @@ Cuando se actualiza el repositorio (`git pull`) o se añaden nuevos módulos, no
 ```bash
 source .venv/bin/activate
 
-# Actualizar código
+# Actualizar código + submodule de skills
 git pull
+git submodule update --remote skills   # actualiza skills al último commit
 
 # Reinstalar (resuelve nuevas deps y regenera entrypoints)
 pip install -e ".[dev]"
+
+# Regenerar knowledge index si el submodule cambió
+auditor knowledge update
 
 # Verificar
 auditor --version
@@ -324,6 +335,46 @@ Get-CsTeamsAppPermissionPolicy -Identity Global
 
 ---
 
+---
+
+### `auditor knowledge` — Knowledge Base (MITRE + Remediación)
+
+La knowledge base enriquece cada finding con MITRE ATT&CK tactic/technique y texto de remediación extraído de las skills del repo `mukul975/Anthropic-Cybersecurity-Skills` (submodule en `skills/`).
+
+```bash
+# Ver estado del índice actual
+auditor knowledge status
+
+# Regenerar índice (necesario tras actualizar el submodule de skills)
+auditor knowledge update
+```
+
+**Cuándo regenerar:**
+- Tras `git submodule update --remote skills`
+- Tras clonar el repo por primera vez con `--recurse-submodules`
+- Si `auditor knowledge status` muestra commit desactualizado
+
+**Sin submodule inicializado:** el índice semilla (`skills_index.json`) commiteado en el repo se usa como fallback — los findings tienen MITRE IDs y remediaciones básicas, pero no el texto completo de las skills.
+
+**Checks cubiertos por la knowledge base:**
+
+| Módulo | Check IDs | Skill fuente |
+|--------|-----------|-------------|
+| Entra ID / CA | M365-CA-001, M365-CA-002 | `auditing-entra-id-with-aadinternals` |
+| Entra ID / Users | M365-USR-001, M365-USR-002 | `auditing-entra-id-with-aadinternals` |
+| Entra ID / Service Principals | M365-SP-001 | `detecting-suspicious-oauth-application-consent` |
+| Entra ID / Roles | M365-ROLE-001 | `auditing-entra-id-with-aadinternals` |
+| Exchange | M365-EXO-001 | `detecting-email-forwarding-rules-attack` |
+| Exchange | M365-EXO-002 | `auditing-entra-id-with-aadinternals` |
+| SharePoint | SPO-001..006 | `hunting-saas-sso-token-abuse` |
+| Teams | TEAMS-001..008 | `hunting-saas-sso-token-abuse` / `detecting-suspicious-oauth-application-consent` |
+| Web DNS | WEB-DNS-* | T1566.001 |
+| Web TLS | WEB-TLS-* | T1557.002 |
+
+Cada finding ahora incluye el campo `mitre_tactic` además de `mitre_id`.
+
+---
+
 ### `auditor report view` — Ver reporte en terminal
 
 ```bash
@@ -351,7 +402,7 @@ auditor report export audit.json --format json --output ./entregas/
 | Hoja | Contenido |
 |------|-----------|
 | **Resumen Ejecutivo** | Metadatos del target, conteo por prioridad (Alta/Media/Baja), leyenda de colores |
-| **Hallazgos** | Tabla completa con todas las columnas: ID, Componente, Título, MITRE ATT&CK, Severidad, Prioridad, Vector, Descripción, Evidencia, Remediación. Header congelado, AutoFilter activo, ordenado por prioridad |
+| **Hallazgos** | Tabla completa: ID, Componente, Título, MITRE ATT&CK, MITRE Tactic, Severidad, Prioridad, Vector, Descripción, Evidencia, Remediación. Header congelado, AutoFilter activo, ordenado por prioridad |
 | **Matriz por Componente** | Agrupación de findings por componente: cuántos Alta/Media/Baja tiene cada área |
 
 **Colores por prioridad en Excel:**
@@ -414,6 +465,8 @@ pytest tests/ --cov=auditor --cov-report=term-missing
 
 - [x] Módulo SharePoint/OneDrive — audit de permisos de sharing externo
 - [x] Módulo Teams — federación, guest access, meeting policies, app policies
+- [x] Knowledge layer — MITRE ATT&CK enrichment + remediación desde Anthropic-Cybersecurity-Skills
+- [x] `auditor knowledge update/status` — gestión del índice de skills
 - [ ] Output HTML con gráficas de riesgo
 - [ ] Integración con ROADtools/AADInternals (subprocess wrappers)
 - [ ] PowerShell bridge para checks Exchange que requieren EXO module
