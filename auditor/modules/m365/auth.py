@@ -16,14 +16,18 @@ GRAPH_SCOPES = [
     "https://graph.microsoft.com/RoleManagement.Read.All",
 ]
 
-# Well-known public client ID (Azure CLI) — used for device-code when no custom app registered
-AZURE_CLI_CLIENT_ID = "04b07795-8ddb-461a-bbee-02f9e1bf7b46"
-
 
 def get_token_device_code(settings: Settings) -> str | None:
     """Acquire token via device-code flow (supports MFA)."""
+    if not settings.client_id:
+        print_err(
+            "AUDITOR_CLIENT_ID not set.\n"
+            "Register an Entra ID app (public client) with delegated Graph permissions,\n"
+            "grant admin consent, then set AUDITOR_CLIENT_ID and AUDITOR_TENANT_ID."
+        )
+        return None
     tenant = settings.tenant_id or "organizations"
-    client_id = settings.client_id or AZURE_CLI_CLIENT_ID
+    client_id = settings.client_id
 
     app = msal.PublicClientApplication(
         client_id,

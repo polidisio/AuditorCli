@@ -188,7 +188,7 @@ async def audit_privileged_roles(client: GraphClient) -> list[Finding]:
             severity=Severity.HIGH,
             priority=Priority.HIGH,
             description=f"Roles assigned permanently (not via PIM JIT): "
-                        f"{', '.join(f\"{a['principal']} ({a['role']})\" for a in permanent_admins[:5])}",
+                        + ", ".join(f"{a['principal']} ({a['role']})" for a in permanent_admins[:5]),
             remediation="Migrate all privileged roles to PIM Just-in-Time activation with approval workflow and MFA.",
         ))
 

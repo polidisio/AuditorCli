@@ -23,8 +23,13 @@ CLI Tool — Python/Shell (TBD según stack elegido)
 # Setup
 pip install -r requirements.txt   # o: go mod download
 
-# Run
+# Run — Web recon
 ./auditor recon --target dominio.com
+
+# Run — M365 audit (requiere app registration propia en Entra ID)
+export AUDITOR_CLIENT_ID="<Application ID de tu app registration>"
+export AUDITOR_TENANT_ID="<Directory/Tenant ID>"
+auditor m365 audit --domain contoso.com --authorized
 
 # Test
 pytest tests/
@@ -71,7 +76,7 @@ CLI modules → Runner → Output (JSON/Markdown/HTML)
 | Archivo | Responsabilidad |
 |---------|----------------|
 | `recon.py` | Pre-auth tenant recon (OpenID config, GetUserRealm) |
-| `auth.py` | MSAL device-code + client-credentials |
+| `auth.py` | MSAL device-code + client-credentials. Requiere `AUDITOR_CLIENT_ID` propio (no acepta Azure CLI app ID — AADSTS65002) |
 | `graph.py` | Graph API client con paginación |
 | `entra.py` | CA policies, MFA, service principals, privileged roles |
 | `exchange.py` | Inbox forwarding rules, SMTP AUTH |
@@ -124,6 +129,14 @@ CLI modules → Runner → Output (JSON/Markdown/HTML)
 - Credenciales: variables de entorno o `~/.auditor/config.toml` (permisos 600)
 - Targets: validar formato antes de pasar a herramientas externas
 - Output: redactar secrets en reportes con `[REDACTED]`
+- M365 auth: no usar app IDs de Microsoft (Azure CLI, etc.) — registrar app propia en Entra ID con permisos delegados de Graph y admin consent
+
+### M365 App Registration (prerequisito)
+1. Entra ID → App registrations → New registration
+2. Authentication → "Allow public client flows" → Yes
+3. API permissions → Microsoft Graph → Delegated: `Policy.Read.All`, `Directory.Read.All`, `AuditLog.Read.All`, `User.Read.All`, `Application.Read.All`, `RoleManagement.Read.All`
+4. Grant admin consent
+5. `export AUDITOR_CLIENT_ID=<app-id>` + `export AUDITOR_TENANT_ID=<tenant-id>`
 
 ---
 
@@ -158,10 +171,11 @@ auditor m365-audit --verbose --dry-run
 - [x] Phase 3: Módulo M365 Audit (Entra ID + Exchange + SharePoint + Teams)
 - [x] Phase 4: Report generator (Markdown + JSON + Excel)
 - [x] Phase 4b: Web security headers + HSTS + TLS/cipher + cookie audit (`headers.py`)
+- [x] Phase 4c: Bugfixes — f-string SyntaxError (`entra.py`), Azure CLI app ID fallback removido (`auth.py`)
 - [ ] Phase 5: Output HTML + ROADtools/AADInternals integration
 
 ---
 
 ## Contact
 **Owner:** Jose Maudisio (@polidisio)
-**Last updated:** 2026-06-22
+**Last updated:** 2026-06-25
