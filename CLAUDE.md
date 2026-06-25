@@ -169,12 +169,12 @@ Usar el script automatizado (requiere `Az.Accounts` PowerShell module + Global A
 .\scripts\setup-entra-app.ps1 -TenantId contoso.com   # tenant explícito
 ```
 
-El script crea la app, habilita device-code (public client), añade los 6 permisos delegados de Graph y otorga admin consent. Al terminar imprime los `export` listos para copiar.
+El script crea la app, habilita device-code (public client), añade los 10 permisos delegados de Graph y otorga admin consent. Al terminar imprime los `export` listos para copiar.
 
 Pasos manuales equivalentes:
 1. Entra ID → App registrations → New registration
 2. Authentication → "Allow public client flows" → Yes
-3. API permissions → Microsoft Graph → Delegated: `Policy.Read.All`, `Directory.Read.All`, `AuditLog.Read.All`, `User.Read.All`, `Application.Read.All`, `RoleManagement.Read.All`
+3. API permissions → Microsoft Graph → Delegated: `Policy.Read.All`, `Directory.Read.All`, `AuditLog.Read.All`, `User.Read.All`, `Application.Read.All`, `RoleManagement.Read.All`, `SharePoint.ReadWrite.All`, `Sites.Read.All`, `TeamworkSettings.Read.All`, `Group.Read.All`
 4. Grant admin consent
 5. `export AUDITOR_CLIENT_ID=<app-id>` + `export AUDITOR_TENANT_ID=<tenant-id>`
 

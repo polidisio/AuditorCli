@@ -63,7 +63,7 @@ The script:
 1. Connects via `Connect-AzAccount`
 2. Resolves Graph permission scope IDs dynamically
 3. Creates a public-client app registration with device-code flow enabled
-4. Adds the 6 required delegated Graph permissions
+4. Adds the 10 required delegated Graph permissions
 5. Grants tenant-wide admin consent
 6. Prints the env vars ready to copy
 
@@ -85,6 +85,10 @@ Or put them in `~/.auditor/.env`.
 | `User.Read.All` | MFA registration details |
 | `Application.Read.All` | OAuth app grants |
 | `RoleManagement.Read.All` | Privileged role assignments |
+| `SharePoint.ReadWrite.All` | SharePoint tenant admin settings (sharing config, legacy auth, OneDrive) |
+| `Sites.Read.All` | Site collections enumeration + external user permissions |
+| `TeamworkSettings.Read.All` | Teams policies (external access, guest, meetings, apps) |
+| `Group.Read.All` | Teams list + guest member enumeration |
 
 ---
 

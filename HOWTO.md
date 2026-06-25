@@ -239,16 +239,17 @@ auditor m365 audit --domain empresa.com --authorized --auth client-credentials
 auditor m365 audit --domain empresa.com --authorized --format json --output ./reportes
 ```
 
-**Permisos Graph API necesarios:**
-- `Policy.Read.All`
-- `Directory.Read.All`
-- `AuditLog.Read.All`
-- `User.Read.All`
-- `Application.Read.All`
-- `RoleManagement.Read.All`
-- `Sites.Read.All` *(SharePoint audit)*
-- `TeamSettings.Read.All` *(Teams audit)*
-- `Group.Read.All` *(Teams enumeration)*
+**Permisos Graph API necesarios (delegados):**
+- `Policy.Read.All` — CA policies, cross-tenant access
+- `Directory.Read.All` — usuarios, grupos, service principals
+- `AuditLog.Read.All` — sign-in y audit logs
+- `User.Read.All` — detalles de registro MFA
+- `Application.Read.All` — OAuth app grants
+- `RoleManagement.Read.All` — asignaciones de roles privilegiados
+- `SharePoint.ReadWrite.All` — configuración tenant SharePoint (sharing, legacy auth, OneDrive)
+- `Sites.Read.All` — enumeración de site collections + permisos externos
+- `TeamworkSettings.Read.All` — políticas Teams (acceso externo, guest, reuniones, apps)
+- `Group.Read.All` — lista de Teams + enumeración de guests
 
 **Qué audita:**
 | Check | Finding ID | MITRE |
