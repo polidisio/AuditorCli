@@ -169,14 +169,17 @@ Usar el script automatizado (requiere `Az.Accounts` PowerShell module + Global A
 .\scripts\setup-entra-app.ps1 -TenantId contoso.com   # tenant explícito
 ```
 
-El script crea la app, habilita device-code (public client), añade los 10 permisos delegados de Graph y otorga admin consent. Al terminar imprime los `export` listos para copiar.
+El script crea la app, habilita device-code (public client), añade los permisos delegados de Graph y SharePoint Online, y otorga admin consent. Al terminar imprime los `export` listos para copiar.
 
 Pasos manuales equivalentes:
 1. Entra ID → App registrations → New registration
 2. Authentication → "Allow public client flows" → Yes
-3. API permissions → Microsoft Graph → Delegated: `Policy.Read.All`, `Directory.Read.All`, `AuditLog.Read.All`, `User.Read.All`, `Application.Read.All`, `RoleManagement.Read.All`, `SharePoint.ReadWrite.All`, `Sites.Read.All`, `TeamworkSettings.Read.All`, `Group.Read.All`
-4. Grant admin consent
-5. `export AUDITOR_CLIENT_ID=<app-id>` + `export AUDITOR_TENANT_ID=<tenant-id>`
+3. API permissions → Microsoft Graph → Delegated: `Policy.Read.All`, `Directory.Read.All`, `AuditLog.Read.All`, `User.Read.All`, `Application.Read.All`, `RoleManagement.Read.All`, `Sites.Read.All`, `Group.Read.All`
+4. API permissions → SharePoint → Delegated: `AllSites.Read` (resource: `00000003-0000-0ff1-ce00-000000000000`) — required for SharePoint REST API fallback
+5. Grant admin consent
+6. `export AUDITOR_CLIENT_ID=<app-id>` + `export AUDITOR_TENANT_ID=<tenant-id>`
+
+Nota: `SharePoint.ReadWrite.All` es un permiso app-only de Graph — NO añadir como delegado (AADSTS650053). Para tenant admin settings vía REST API, el usuario autenticado además debe tener rol de SharePoint Administrator en Entra ID.
 
 ---
 

@@ -68,10 +68,13 @@ async def audit_users(client: GraphClient) -> list[Finding]:
 
     # Users without MFA methods registered
     try:
-        users_without_mfa = await client.get_all_pages(
+        all_registrations = await client.get_all_pages(
             "/reports/authenticationMethods/userRegistrationDetails"
-            "?$filter=isMfaRegistered eq false and accountEnabled eq true"
         )
+        users_without_mfa = [
+            u for u in all_registrations
+            if u.get("isEnabled") and not u.get("isMfaRegistered")
+        ]
         if users_without_mfa:
             count = len(users_without_mfa)
             print_warn(f"{count} users without MFA registered")

@@ -4,7 +4,7 @@ from __future__ import annotations
 import msal
 
 from auditor.config import Settings
-from auditor.utils.console import console, print_step, print_ok, print_err
+from auditor.utils.console import console, print_step, print_ok, print_err, print_warn
 
 # Module-level MSAL session — persisted after device-code auth so
 # acquire_resource_token() can silently get tokens for other resources
@@ -22,6 +22,8 @@ GRAPH_SCOPES = [
     "https://graph.microsoft.com/RoleManagement.Read.All",
     "https://graph.microsoft.com/Sites.Read.All",
     "https://graph.microsoft.com/Group.Read.All",
+    "https://graph.microsoft.com/TeamworkAppSettings.Read.All",
+    "https://graph.microsoft.com/AppCatalog.Read.All",
 ]
 
 
@@ -78,6 +80,15 @@ def acquire_resource_token(resource_base_url: str) -> str | None:
     )
     if result and "access_token" in result:
         return result["access_token"]
+    if result:
+        err = result.get("error_description") or result.get("error") or "unknown"
+        print_warn(f"SharePoint token silent acquisition failed: {err}")
+    else:
+        print_warn(
+            "SharePoint token silent acquisition returned nothing — "
+            "app registration may lack SharePoint Online permissions. "
+            "Run: .\\scripts\\add-sharepoint-permission.ps1, then re-authenticate."
+        )
     return None
 
 

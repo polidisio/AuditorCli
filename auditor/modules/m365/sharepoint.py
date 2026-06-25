@@ -284,32 +284,43 @@ async def audit_sharepoint(access_token: str) -> list[Finding]:
                 if not admin_url:
                     print_warn("Could not discover SharePoint admin URL from tenant organization data")
                 elif not sp_token:
-                    print_warn("Could not acquire SharePoint token silently — session may have expired")
+                    print_warn(
+                        "Could not acquire SharePoint token — app registration likely missing "
+                        "SharePoint Online API permissions (AllSites.Read). "
+                        "Re-run setup-entra-app.ps1 or add AllSites.Read manually in Entra ID, "
+                        "then re-authenticate."
+                    )
                 _c = _kr.get("SPO-INFO-001")
                 findings.append(Finding(
                     id="SPO-INFO-001",
                     title="SharePoint Tenant Settings Not Auditable via Delegated Token",
                     component="SharePoint Online — Tenant Config",
-                    vector="SharePoint admin API requires application-only token (not available in device-code flow)",
+                    vector="SharePoint admin API requires SharePoint-scoped token + SharePoint Administrator role",
                     mitre_id=(_c.mitre_id if _c else None),
                     mitre_tactic=_c.mitre_tactic if _c else None,
                     severity=Severity.INFO,
                     priority=Priority.LOW,
                     description=(
-                        "The /admin/sharepoint/settings Graph endpoint returned 403 and the SharePoint "
-                        "REST API fallback also failed. SharePoint.ReadWrite.All only exists as an "
-                        "application-only permission — unavailable in device-code flow.\n\n"
+                        "The /admin/sharepoint/settings Graph endpoint returned 403. "
+                        "The SharePoint REST API fallback also failed — either the app registration "
+                        "lacks SharePoint Online (AllSites.Read) delegated permission, or the "
+                        "authenticated user does not have the SharePoint Administrator role.\n\n"
                         "Sharing configuration, anonymous link policy, and legacy auth settings "
                         "could not be verified automatically."
                     ),
                     remediation=(
-                        "Option A — App-only audit:\n"
+                        "Option A — Add SharePoint permission to existing app (recommended):\n"
+                        "  1. Run: .\\scripts\\add-sharepoint-permission.ps1\n"
+                        "     (reads $AUDITOR_CLIENT_ID, or pass -ClientId <app-id>)\n"
+                        "  2. Re-authenticate: auditor m365 audit --domain <domain> --authorized\n"
+                        "  Note: authenticated user must also have SharePoint Administrator role.\n\n"
+                        "Option B — App-only audit (client credentials):\n"
                         "  1. Set AUDITOR_CLIENT_SECRET in ~/.auditor/.env\n"
-                        "  2. In Entra ID: add SharePoint.ReadWrite.All as Application permission + grant admin consent\n"
+                        "  2. In Entra ID: add Sites.FullControl.All as Application permission + grant admin consent\n"
                         "  3. Re-run: auditor m365 audit --domain <domain> --authorized --auth client-credentials\n\n"
-                        "Option B — Manual verification:\n"
-                        "  SharePoint Admin Center → Policies → Sharing\n"
-                        "  PowerShell: Get-SPOTenant | Select SharingCapability,DefaultSharingLinkType,"
+                        "Option C — Manual PowerShell verification:\n"
+                        "  Connect-SPOService -Url https://<tenant>-admin.sharepoint.com\n"
+                        "  Get-SPOTenant | Select SharingCapability,DefaultSharingLinkType,"
                         "RequireAnonymousLinksExpireInDays,LegacyAuthProtocolsEnabled"
                     ),
                 ))
@@ -319,8 +330,10 @@ async def audit_sharepoint(access_token: str) -> list[Finding]:
     # ── Site collections with broad external sharing ───────────────────────
     print_step("Enumerating SharePoint site collections...")
     try:
+        # Beta admin endpoint exposes sharingCapability per site
         sites = await client.get_all_pages(
-            "/sites?$select=id,displayName,webUrl,sharingCapability&search=*"
+            "/admin/sharepoint/sites?$select=id,displayName,webUrl,sharingCapability",
+            beta=True,
         )
         print_ok(f"Found {len(sites)} sites")
 
@@ -346,6 +359,19 @@ async def audit_sharepoint(access_token: str) -> list[Finding]:
                 remediation=(_c.remediation if _c else None) or "Review each site in SharePoint Admin Center. Restrict sharing to authenticated users minimum.",
             ))
 
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code in (400, 403):
+            # Admin endpoint requires SharePoint Admin role — fall back to basic enumeration
+            try:
+                sites = await client.get_all_pages(
+                    "/sites?$select=id,displayName,webUrl&search=*"
+                )
+                print_ok(f"Found {len(sites)} sites")
+                print_warn("Per-site sharingCapability unavailable — SPO-005 check skipped")
+            except Exception as e2:
+                print_warn(f"Could not enumerate site collections: {e2}")
+        else:
+            print_warn(f"Could not enumerate site collections: {e}")
     except Exception as e:
         print_warn(f"Could not enumerate site collections: {e}")
 
