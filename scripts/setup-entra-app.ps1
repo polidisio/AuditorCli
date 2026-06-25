@@ -85,10 +85,10 @@ $resourceAccess = $resolvedScopes | ForEach-Object {
 Write-Host "`n[4/5] Creating app registration '$AppName'..." -ForegroundColor Cyan
 
 $appPayload = @{
-    displayName          = $AppName
-    signInAudience       = "AzureADMyOrg"
+    displayName            = $AppName
+    signInAudience         = "AzureADMyOrg"
     isFallbackPublicClient = $true
-    publicClient         = @{
+    publicClient           = @{
         redirectUris = @("https://login.microsoftonline.com/common/oauth2/nativeclient")
     }
     requiredResourceAccess = @(
