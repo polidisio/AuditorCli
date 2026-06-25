@@ -4,11 +4,10 @@ from __future__ import annotations
 import msal
 
 from auditor.config import Settings
-from auditor.utils.console import console, print_step, print_ok, print_err, print_warn
+from auditor.utils.console import console, print_step, print_ok, print_err
 
-# Module-level MSAL session — persisted after device-code auth so
-# acquire_resource_token() can silently get tokens for other resources
-# (e.g. SharePoint) using the cached refresh token.
+# Module-level MSAL session — persisted after device-code auth so future
+# token requests for the same account can reuse the cached refresh token.
 _app: msal.PublicClientApplication | None = None
 _account: dict | None = None
 
@@ -24,6 +23,7 @@ GRAPH_SCOPES = [
     "https://graph.microsoft.com/Group.Read.All",
     "https://graph.microsoft.com/TeamworkAppSettings.Read.All",
     "https://graph.microsoft.com/AppCatalog.Read.All",
+    "https://graph.microsoft.com/SharePointTenantSettings.Read.All",
 ]
 
 
@@ -63,55 +63,6 @@ def get_token_device_code(settings: Settings) -> str | None:
         return result["access_token"]
 
     print_err(f"Auth failed: {result.get('error_description', result.get('error', 'unknown'))}")
-    return None
-
-
-def acquire_resource_token(resource_base_url: str, force_interactive: bool = False) -> str | None:
-    """Acquire a token for a non-Graph resource (e.g. SharePoint admin URL).
-
-    Tries silent acquisition first (uses the refresh token cached from the
-    initial device-code flow). If silent fails — or force_interactive=True —
-    falls back to a new device-code flow for this resource.
-
-    force_interactive=True skips silent entirely. Useful when the silent token
-    is technically valid but rejected by the resource (e.g. SharePoint admin
-    API returns AADSTS50199 / 401 because it requires a fresh MFA claim).
-    """
-    if not _app or not _account:
-        return None
-    scopes = [f"{resource_base_url}/.default"]
-
-    if not force_interactive:
-        result = _app.acquire_token_silent(scopes=scopes, account=_account)
-        if result and "access_token" in result:
-            return result["access_token"]
-
-        silent_err = ""
-        if result:
-            silent_err = result.get("error_description") or result.get("error") or "unknown"
-        print_warn(
-            f"Silent token acquisition failed for {resource_base_url}: {silent_err}\n"
-            "Resource requires fresh user interaction — starting device-code flow..."
-        )
-    else:
-        print_warn(f"Forcing interactive auth for {resource_base_url} (silent token was rejected)...")
-
-    flow = _app.initiate_device_flow(scopes=scopes)
-    if "user_code" not in flow:
-        print_warn(f"Device-code flow init failed: {flow.get('error_description', 'unknown')}")
-        return None
-
-    console.print(f"\n[bold yellow]Open:[/] {flow['verification_uri']}")
-    console.print(f"[bold yellow]Code :[/] {flow['user_code']}\n")
-    print_step(f"Waiting for {resource_base_url} authentication...")
-
-    result = _app.acquire_token_by_device_flow(flow)
-    if result and "access_token" in result:
-        print_ok(f"Token acquired for {resource_base_url}")
-        return result["access_token"]
-
-    err = (result or {}).get("error_description") or (result or {}).get("error") or "unknown"
-    print_warn(f"Device-code auth failed for {resource_base_url}: {err}")
     return None
 
 

@@ -72,7 +72,8 @@ $scopeNames = @(
     "Sites.Read.All",
     "Group.Read.All",
     "TeamworkAppSettings.Read.All",
-    "AppCatalog.Read.All"
+    "AppCatalog.Read.All",
+    "SharePointTenantSettings.Read.All"
 )
 
 $resolvedScopes = $graphSp.oauth2PermissionScopes | Where-Object { $_.value -in $scopeNames }
