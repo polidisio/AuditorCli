@@ -67,28 +67,46 @@ def get_token_device_code(settings: Settings) -> str | None:
 
 
 def acquire_resource_token(resource_base_url: str) -> str | None:
-    """Silently acquire a token for a non-Graph resource (e.g. SharePoint admin URL).
+    """Acquire a token for a non-Graph resource (e.g. SharePoint admin URL).
 
-    Uses the refresh token cached from the device-code auth session.
-    Returns None if no cached session exists or if silent acquisition fails.
+    Tries silent acquisition first (uses the refresh token cached from the
+    initial device-code flow). If silent fails — typical when the resource
+    requires fresh user interaction (AADSTS50199), which SharePoint admin
+    APIs enforce even when the MFA claim is present in the cached token —
+    falls back to a new device-code flow for this resource.
     """
     if not _app or not _account:
         return None
-    result = _app.acquire_token_silent(
-        scopes=[f"{resource_base_url}/.default"],
-        account=_account,
-    )
+    scopes = [f"{resource_base_url}/.default"]
+
+    result = _app.acquire_token_silent(scopes=scopes, account=_account)
     if result and "access_token" in result:
         return result["access_token"]
+
+    silent_err = ""
     if result:
-        err = result.get("error_description") or result.get("error") or "unknown"
-        print_warn(f"SharePoint token silent acquisition failed: {err}")
-    else:
-        print_warn(
-            "SharePoint token silent acquisition returned nothing — "
-            "app registration may lack SharePoint Online permissions. "
-            "Run: .\\scripts\\add-sharepoint-permission.ps1, then re-authenticate."
-        )
+        silent_err = result.get("error_description") or result.get("error") or "unknown"
+    print_warn(
+        f"Silent token acquisition failed for {resource_base_url}: {silent_err}\n"
+        "Resource requires fresh user interaction — starting device-code flow..."
+    )
+
+    flow = _app.initiate_device_flow(scopes=scopes)
+    if "user_code" not in flow:
+        print_warn(f"Device-code flow init failed: {flow.get('error_description', 'unknown')}")
+        return None
+
+    console.print(f"\n[bold yellow]Open:[/] {flow['verification_uri']}")
+    console.print(f"[bold yellow]Code :[/] {flow['user_code']}\n")
+    print_step(f"Waiting for {resource_base_url} authentication...")
+
+    result = _app.acquire_token_by_device_flow(flow)
+    if result and "access_token" in result:
+        print_ok(f"Token acquired for {resource_base_url}")
+        return result["access_token"]
+
+    err = (result or {}).get("error_description") or (result or {}).get("error") or "unknown"
+    print_warn(f"Device-code auth failed for {resource_base_url}: {err}")
     return None
 
 
