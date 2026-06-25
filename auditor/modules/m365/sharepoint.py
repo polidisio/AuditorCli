@@ -1,6 +1,8 @@
 """SharePoint Online / OneDrive for Business audit via Microsoft Graph."""
 from __future__ import annotations
 
+import httpx
+
 from auditor.knowledge import registry as _kr
 from auditor.models import Finding, Priority, Severity
 from auditor.modules.m365.graph import GraphClient
@@ -125,28 +127,42 @@ async def audit_sharepoint(access_token: str) -> list[Finding]:
         elif legacy_auth is False:
             print_ok("SharePoint legacy auth: disabled")
 
-    except Exception as e:
-        print_warn(f"SharePoint tenant settings require SharePoint Admin role: {e}")
-        _c = _kr.get("SPO-INFO-001")
-        findings.append(Finding(
-            id="SPO-INFO-001",
-            title="SharePoint Tenant Settings Require Manual Verification",
-            component="SharePoint Online — Tenant Config",
-            vector="Insufficient permissions to read SharePoint admin settings via Graph",
-            mitre_id=(_c.mitre_id if _c else None),
-            mitre_tactic=_c.mitre_tactic if _c else None,
-            severity=Severity.INFO,
-            priority=Priority.LOW,
-            description=(
-                "SharePoint admin settings could not be read. "
-                "Verify manually in SharePoint Admin Center or with a SharePoint Admin account."
-            ),
-            remediation=(_c.remediation if _c else None) or (
-                "Check manually:\n"
-                "• SharePoint Admin Center → Policies → Sharing\n"
-                "• PowerShell: Get-SPOTenant | Select SharingCapability,DefaultSharingLinkType,RequireAnonymousLinksExpireInDays"
-            ),
-        ))
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 403:
+            print_warn(
+                "SharePoint admin settings: 403 — SharePoint.ReadWrite.All is an application-only "
+                "permission. Re-run with --auth client-credentials to audit these settings."
+            )
+            _c = _kr.get("SPO-INFO-001")
+            findings.append(Finding(
+                id="SPO-INFO-001",
+                title="SharePoint Tenant Settings Not Auditable via Delegated Token",
+                component="SharePoint Online — Tenant Config",
+                vector="SharePoint admin API requires application-only token (not available in device-code flow)",
+                mitre_id=(_c.mitre_id if _c else None),
+                mitre_tactic=_c.mitre_tactic if _c else None,
+                severity=Severity.INFO,
+                priority=Priority.LOW,
+                description=(
+                    "The /admin/sharepoint/settings Graph endpoint returned 403. "
+                    "SharePoint.ReadWrite.All only exists as an *application* (app-only) permission — "
+                    "it cannot be requested in device-code (delegated) flow regardless of user role.\n\n"
+                    "Sharing configuration, anonymous link policy, and legacy auth settings "
+                    "could not be verified automatically."
+                ),
+                remediation=(
+                    "Option A — App-only audit (recommended):\n"
+                    "  1. Set AUDITOR_CLIENT_SECRET in ~/.auditor/.env\n"
+                    "  2. In Entra ID: add SharePoint.ReadWrite.All as Application permission + grant admin consent\n"
+                    "  3. Re-run: auditor m365 audit --domain <domain> --authorized --auth client-credentials\n\n"
+                    "Option B — Manual verification:\n"
+                    "  SharePoint Admin Center → Policies → Sharing\n"
+                    "  PowerShell: Get-SPOTenant | Select SharingCapability,DefaultSharingLinkType,"
+                    "RequireAnonymousLinksExpireInDays,IsLegacyAuthProtocolsEnabled"
+                ),
+            ))
+        else:
+            raise
 
     # ── Site collections with broad external sharing ───────────────────────
     print_step("Enumerating SharePoint site collections...")
@@ -203,8 +219,9 @@ async def audit_sharepoint(access_token: str) -> list[Finding]:
                 description="OneDrive for Business sharing is set to 'Anyone with the link', allowing anonymous file access.",
                 remediation=(_c.remediation if _c else None) or "Restrict OneDrive sharing to authenticated external users or org-only.",
             ))
-    except Exception:
-        pass
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code != 403:
+            raise
 
     return findings
 
