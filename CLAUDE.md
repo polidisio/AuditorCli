@@ -132,6 +132,16 @@ CLI modules → Runner → Output (JSON/Markdown/HTML)
 - M365 auth: no usar app IDs de Microsoft (Azure CLI, etc.) — registrar app propia en Entra ID con permisos delegados de Graph y admin consent
 
 ### M365 App Registration (prerequisito)
+Usar el script automatizado (requiere `Az.Accounts` PowerShell module + Global Admin):
+
+```powershell
+.\scripts\setup-entra-app.ps1                          # tenant del Connect-AzAccount
+.\scripts\setup-entra-app.ps1 -TenantId contoso.com   # tenant explícito
+```
+
+El script crea la app, habilita device-code (public client), añade los 6 permisos delegados de Graph y otorga admin consent. Al terminar imprime los `export` listos para copiar.
+
+Pasos manuales equivalentes:
 1. Entra ID → App registrations → New registration
 2. Authentication → "Allow public client flows" → Yes
 3. API permissions → Microsoft Graph → Delegated: `Policy.Read.All`, `Directory.Read.All`, `AuditLog.Read.All`, `User.Read.All`, `Application.Read.All`, `RoleManagement.Read.All`
