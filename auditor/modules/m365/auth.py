@@ -6,6 +6,12 @@ import msal
 from auditor.config import Settings
 from auditor.utils.console import console, print_step, print_ok, print_err
 
+# Module-level MSAL session — persisted after device-code auth so
+# acquire_resource_token() can silently get tokens for other resources
+# (e.g. SharePoint) using the cached refresh token.
+_app: msal.PublicClientApplication | None = None
+_account: dict | None = None
+
 
 GRAPH_SCOPES = [
     "https://graph.microsoft.com/Policy.Read.All",
@@ -21,6 +27,8 @@ GRAPH_SCOPES = [
 
 def get_token_device_code(settings: Settings) -> str | None:
     """Acquire token via device-code flow (supports MFA)."""
+    global _app, _account
+
     if not settings.client_id:
         print_err(
             "AUDITOR_CLIENT_ID not set.\n"
@@ -48,9 +56,28 @@ def get_token_device_code(settings: Settings) -> str | None:
     result = app.acquire_token_by_device_flow(flow)
     if "access_token" in result:
         print_ok(f"Authenticated as: {result.get('id_token_claims', {}).get('preferred_username', 'unknown')}")
+        _app = app
+        _account = (app.get_accounts() or [None])[0]
         return result["access_token"]
 
     print_err(f"Auth failed: {result.get('error_description', result.get('error', 'unknown'))}")
+    return None
+
+
+def acquire_resource_token(resource_base_url: str) -> str | None:
+    """Silently acquire a token for a non-Graph resource (e.g. SharePoint admin URL).
+
+    Uses the refresh token cached from the device-code auth session.
+    Returns None if no cached session exists or if silent acquisition fails.
+    """
+    if not _app or not _account:
+        return None
+    result = _app.acquire_token_silent(
+        scopes=[f"{resource_base_url}/.default"],
+        account=_account,
+    )
+    if result and "access_token" in result:
+        return result["access_token"]
     return None
 
 

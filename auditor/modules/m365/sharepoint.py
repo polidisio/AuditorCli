@@ -9,6 +9,35 @@ from auditor.modules.m365.graph import GraphClient
 from auditor.utils.console import print_step, print_ok, print_warn
 
 
+async def _discover_admin_url(graph_client: GraphClient) -> str | None:
+    """Derive SharePoint admin URL from the tenant's initial (.onmicrosoft.com) domain."""
+    try:
+        org = await graph_client.get("/organization")
+        domains = org.get("value", [{}])[0].get("verifiedDomains", [])
+        initial = next((d["name"] for d in domains if d.get("isInitial")), None)
+        if initial:
+            prefix = initial.replace(".onmicrosoft.com", "")
+            return f"https://{prefix}-admin.sharepoint.com"
+    except Exception:
+        pass
+    return None
+
+
+async def _get_spo_settings_via_rest(admin_url: str, sp_token: str) -> dict | None:
+    """Call SharePoint Online REST API for tenant-level settings."""
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.get(
+            f"{admin_url}/_api/SPO.Tenant/GetSPOTenant",
+            headers={
+                "Authorization": f"Bearer {sp_token}",
+                "Accept": "application/json;odata=nometadata",
+            },
+        )
+        if r.is_success:
+            return r.json()
+    return None
+
+
 # Sharing capability values from Graph API
 _SHARING_LEVEL = {
     "disabled": "Sharing disabled",
@@ -129,38 +158,161 @@ async def audit_sharepoint(access_token: str) -> list[Finding]:
 
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 403:
-            print_warn(
-                "SharePoint admin settings: 403 — SharePoint.ReadWrite.All is an application-only "
-                "permission. Re-run with --auth client-credentials to audit these settings."
-            )
-            _c = _kr.get("SPO-INFO-001")
-            findings.append(Finding(
-                id="SPO-INFO-001",
-                title="SharePoint Tenant Settings Not Auditable via Delegated Token",
-                component="SharePoint Online — Tenant Config",
-                vector="SharePoint admin API requires application-only token (not available in device-code flow)",
-                mitre_id=(_c.mitre_id if _c else None),
-                mitre_tactic=_c.mitre_tactic if _c else None,
-                severity=Severity.INFO,
-                priority=Priority.LOW,
-                description=(
-                    "The /admin/sharepoint/settings Graph endpoint returned 403. "
-                    "SharePoint.ReadWrite.All only exists as an *application* (app-only) permission — "
-                    "it cannot be requested in device-code (delegated) flow regardless of user role.\n\n"
-                    "Sharing configuration, anonymous link policy, and legacy auth settings "
-                    "could not be verified automatically."
-                ),
-                remediation=(
-                    "Option A — App-only audit (recommended):\n"
-                    "  1. Set AUDITOR_CLIENT_SECRET in ~/.auditor/.env\n"
-                    "  2. In Entra ID: add SharePoint.ReadWrite.All as Application permission + grant admin consent\n"
-                    "  3. Re-run: auditor m365 audit --domain <domain> --authorized --auth client-credentials\n\n"
-                    "Option B — Manual verification:\n"
-                    "  SharePoint Admin Center → Policies → Sharing\n"
-                    "  PowerShell: Get-SPOTenant | Select SharingCapability,DefaultSharingLinkType,"
-                    "RequireAnonymousLinksExpireInDays,IsLegacyAuthProtocolsEnabled"
-                ),
-            ))
+            # Graph endpoint is app-only. Try SharePoint Online REST API with a
+            # SharePoint-scoped token acquired silently from the MSAL session.
+            from auditor.modules.m365.auth import acquire_resource_token
+
+            print_warn("SharePoint admin settings: Graph 403 — trying SharePoint REST API fallback...")
+            admin_url = await _discover_admin_url(client)
+            sp_token = acquire_resource_token(admin_url) if admin_url else None
+            spo_data = await _get_spo_settings_via_rest(admin_url, sp_token) if (admin_url and sp_token) else None
+
+            if spo_data:
+                print_ok(f"SharePoint REST API: settings retrieved from {admin_url}")
+                # SPO REST API uses int enums:
+                # SharingCapability: 0=Disabled,1=ExternalUserSharingOnly,3=Anyone,4=ExistingExternal
+                # DefaultSharingLinkType: 0=None,1=Direct,2=Internal,3=AnonymousAccess
+                sharing_cap = spo_data.get("SharingCapability", -1)
+                default_link = spo_data.get("DefaultSharingLinkType", -1)
+                anon_expiry = spo_data.get("RequireAnonymousLinksExpireInDays", 0)
+                legacy_auth = spo_data.get("LegacyAuthProtocolsEnabled", None)
+
+                sharing_label = {
+                    0: "Sharing disabled",
+                    1: "Authenticated external users only",
+                    3: "Anyone with the link (anonymous)",
+                    4: "Existing external users only",
+                }.get(sharing_cap, str(sharing_cap))
+                print_ok(f"Tenant sharing level: {sharing_label}")
+
+                if sharing_cap == 3:
+                    _c = _kr.get("SPO-001")
+                    findings.append(Finding(
+                        id="SPO-001",
+                        title="SharePoint Anonymous Link Sharing Enabled (Anyone)",
+                        component="SharePoint Online — Tenant Sharing",
+                        vector="Anyone with a link can access files without authentication",
+                        mitre_id=(_c.mitre_id if _c else None) or "T1567.002",
+                        mitre_tactic=_c.mitre_tactic if _c else None,
+                        severity=Severity.HIGH,
+                        priority=Priority.HIGH,
+                        description=(
+                            "Tenant sharing capability is set to 'Anyone with the link'. "
+                            "Unauthenticated users can access files and folders if someone shares a link."
+                        ),
+                        remediation=(_c.remediation if _c else None) or (
+                            "Restrict to 'ExternalUserSharingOnly' or 'ExistingExternalUserSharingOnly'. "
+                            "Admin center: SharePoint → Policies → Sharing → set to 'New and existing guests'."
+                        ),
+                    ))
+
+                if default_link == 3:
+                    _c = _kr.get("SPO-002")
+                    findings.append(Finding(
+                        id="SPO-002",
+                        title="Default Sharing Link Type is 'Anyone' (Anonymous)",
+                        component="SharePoint Online — Default Link",
+                        vector="Users share anonymous links by default without consciously choosing to",
+                        mitre_id=(_c.mitre_id if _c else None) or "T1567.002",
+                        mitre_tactic=_c.mitre_tactic if _c else None,
+                        severity=Severity.MEDIUM,
+                        priority=Priority.MEDIUM,
+                        description=(
+                            "The default link type when sharing is 'Anyone with the link'. "
+                            "Users creating sharing links default to anonymous access unless they manually change it."
+                        ),
+                        remediation=(_c.remediation if _c else None) or (
+                            "Change default to 'Specific people' or 'Only people in your organization'. "
+                            "Admin center: SharePoint → Policies → Sharing → Default link type."
+                        ),
+                    ))
+
+                if sharing_cap == 3 and anon_expiry == 0:
+                    _c = _kr.get("SPO-003")
+                    findings.append(Finding(
+                        id="SPO-003",
+                        title="Anonymous Links Have No Expiration Date",
+                        component="SharePoint Online — Anonymous Links",
+                        vector="Leaked anonymous links remain valid indefinitely",
+                        mitre_id=(_c.mitre_id if _c else None) or "T1567.002",
+                        mitre_tactic=_c.mitre_tactic if _c else None,
+                        severity=Severity.MEDIUM,
+                        priority=Priority.MEDIUM,
+                        description="Anonymous sharing links never expire. A leaked link provides permanent unauthenticated access.",
+                        remediation=(_c.remediation if _c else None) or "Set expiration on anonymous links: SharePoint Admin Center → Sharing → set 'These links must expire within this many days'.",
+                    ))
+
+                if legacy_auth is True:
+                    _c = _kr.get("SPO-004")
+                    findings.append(Finding(
+                        id="SPO-004",
+                        title="Legacy Authentication Protocols Enabled for SharePoint",
+                        component="SharePoint Online — Legacy Auth",
+                        vector="Legacy auth bypasses MFA and Conditional Access for SharePoint",
+                        mitre_id=(_c.mitre_id if _c else None) or "T1078.004",
+                        mitre_tactic=_c.mitre_tactic if _c else None,
+                        severity=Severity.HIGH,
+                        priority=Priority.HIGH,
+                        description=(
+                            "Legacy authentication protocols (Basic Auth, Forms-based) are enabled for SharePoint Online. "
+                            "These protocols bypass Azure AD MFA and Conditional Access policies."
+                        ),
+                        remediation=(_c.remediation if _c else None) or "Disable legacy auth: SharePoint Admin Center → Settings → Legacy authentication → Off.",
+                    ))
+                elif legacy_auth is False:
+                    print_ok("SharePoint legacy auth: disabled")
+
+                # OneDrive sharing via REST
+                od_cap = spo_data.get("OneDriveSharingCapability", -1)
+                if od_cap == 3:
+                    _c = _kr.get("SPO-006")
+                    findings.append(Finding(
+                        id="SPO-006",
+                        title="OneDrive for Business Allows Anonymous Link Sharing",
+                        component="OneDrive for Business — Sharing",
+                        vector="Employees can share personal OneDrive files anonymously",
+                        mitre_id=(_c.mitre_id if _c else None) or "T1567.002",
+                        mitre_tactic=_c.mitre_tactic if _c else None,
+                        severity=Severity.MEDIUM,
+                        priority=Priority.MEDIUM,
+                        description="OneDrive for Business sharing is set to 'Anyone with the link', allowing anonymous file access.",
+                        remediation=(_c.remediation if _c else None) or "Restrict OneDrive sharing to authenticated external users or org-only.",
+                    ))
+
+            else:
+                # SharePoint REST API also unavailable — keep guidance finding
+                if not admin_url:
+                    print_warn("Could not discover SharePoint admin URL from tenant organization data")
+                elif not sp_token:
+                    print_warn("Could not acquire SharePoint token silently — session may have expired")
+                _c = _kr.get("SPO-INFO-001")
+                findings.append(Finding(
+                    id="SPO-INFO-001",
+                    title="SharePoint Tenant Settings Not Auditable via Delegated Token",
+                    component="SharePoint Online — Tenant Config",
+                    vector="SharePoint admin API requires application-only token (not available in device-code flow)",
+                    mitre_id=(_c.mitre_id if _c else None),
+                    mitre_tactic=_c.mitre_tactic if _c else None,
+                    severity=Severity.INFO,
+                    priority=Priority.LOW,
+                    description=(
+                        "The /admin/sharepoint/settings Graph endpoint returned 403 and the SharePoint "
+                        "REST API fallback also failed. SharePoint.ReadWrite.All only exists as an "
+                        "application-only permission — unavailable in device-code flow.\n\n"
+                        "Sharing configuration, anonymous link policy, and legacy auth settings "
+                        "could not be verified automatically."
+                    ),
+                    remediation=(
+                        "Option A — App-only audit:\n"
+                        "  1. Set AUDITOR_CLIENT_SECRET in ~/.auditor/.env\n"
+                        "  2. In Entra ID: add SharePoint.ReadWrite.All as Application permission + grant admin consent\n"
+                        "  3. Re-run: auditor m365 audit --domain <domain> --authorized --auth client-credentials\n\n"
+                        "Option B — Manual verification:\n"
+                        "  SharePoint Admin Center → Policies → Sharing\n"
+                        "  PowerShell: Get-SPOTenant | Select SharingCapability,DefaultSharingLinkType,"
+                        "RequireAnonymousLinksExpireInDays,LegacyAuthProtocolsEnabled"
+                    ),
+                ))
         else:
             raise
 
