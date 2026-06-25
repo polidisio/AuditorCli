@@ -15,7 +15,6 @@ GRAPH_SCOPES = [
     "https://graph.microsoft.com/Application.Read.All",
     "https://graph.microsoft.com/RoleManagement.Read.All",
     "https://graph.microsoft.com/Sites.Read.All",
-    "https://graph.microsoft.com/TeamworkSettings.Read.All",
     "https://graph.microsoft.com/Group.Read.All",
 ]
 
